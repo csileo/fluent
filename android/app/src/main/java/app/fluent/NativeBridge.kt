@@ -68,6 +68,18 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         }, main)
     }
 
+    // ---------- storage ----------
+    // Settings, notebook and conversation, kept by the app so they survive WebView resets and updates.
+    private val prefs = activity.getSharedPreferences("fluent", android.content.Context.MODE_PRIVATE)
+
+    @JavascriptInterface
+    fun getItem(key: String): String? = prefs.getString(key, null)
+
+    @JavascriptInterface
+    fun setItem(key: String, value: String) {
+        prefs.edit().putString(key, value).apply()
+    }
+
     // ---------- speech recognition ----------
 
     @JavascriptInterface

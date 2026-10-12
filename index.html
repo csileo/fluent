@@ -85,6 +85,10 @@ form.typed button { border: 0; background: var(--ink); color: var(--paper); bord
 .field { display: grid; gap: 4px }
 .field label, .field .lab { font-weight: 700; font-size: .9rem }
 .field small { color: var(--muted); font-size: .8rem }
+.field textarea { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 10px; width: 100%; font: .85rem/1.45 var(--font-body); resize: vertical }
+.noted { font-size: .8rem; color: var(--muted) }
+.noted mark { background: none; color: inherit; text-decoration: underline; text-decoration-color: var(--mark); text-decoration-thickness: 3px }
+.bubble strong { background: var(--mark); color: var(--mark-ink); padding: 0 3px; border-radius: 3px; font-weight: 700 }
 .field select, .field input[type=text], .field input[type=password] { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 10px; width: 100% }
 .mode { font-size: .85rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px }
 .mode b { color: var(--accent) }
@@ -229,7 +233,12 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
     <div class="field">
       <span class="lab" data-i="corrections">Corrections</span>
       <label class="switch"><input type="checkbox" id="nativeExplain" checked> <span data-i="nativeExplain"></span></label>
-      <label class="switch"><input type="checkbox" id="speakFix" checked> <span data-i="speakFix"></span></label>
+    </div>
+    <div class="field">
+      <label for="prompt" data-i="promptLabel">Instructions pour Claude</label>
+      <textarea id="prompt" rows="16" spellcheck="false"></textarea>
+      <small data-i="promptHelp"></small>
+      <div class="row"><button class="btn" id="promptReset" type="button" data-i="promptReset">Rétablir</button></div>
     </div>
     <div class="row"><button class="btn" id="newChat" type="button" data-i="newChat">Nouvelle conversation</button></div>
   </div>
@@ -237,9 +246,19 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
 
 <script type="module">
 const $ = (id) => document.getElementById(id);
+// In the Android app, data is also kept by the app itself (survives WebView resets and updates).
 const store = {
-  get(k, d) { try { const v = localStorage.getItem("fluent:" + k); return v === null ? d : JSON.parse(v) } catch { return d } },
-  set(k, v) { try { localStorage.setItem("fluent:" + k, JSON.stringify(v)) } catch {} },
+  get(k, d) {
+    try {
+      const v = window.FluentNative?.getItem("fluent:" + k) ?? localStorage.getItem("fluent:" + k);
+      return v === null || v === undefined ? d : JSON.parse(v);
+    } catch { return d }
+  },
+  set(k, v) {
+    const json = JSON.stringify(v);
+    try { localStorage.setItem("fluent:" + k, json) } catch {}
+    try { window.FluentNative?.setItem("fluent:" + k, json) } catch {}
+  },
 };
 
 // ---------- interface text ----------
@@ -268,7 +287,7 @@ const I18N = {
     patience: "Silence avant envoi :", patienceHelp: "Utilisé seulement sans mot de fin.",
     carMode: "Mode voiture", carModeLabel: "Grand affichage, réponses courtes, écoute prolongée",
     carModeHelp: "L'écran reste allumé pendant la conversation. Commandes à la voix : demandez de répéter, de parler plus lentement ou plus vite, de changer de sujet ou de faire une pause.",
-    corrections: "Corrections", nativeExplain: "Explications dans ma langue maternelle (sinon dans la langue pratiquée)", speakFix: "Lire la correction à voix haute",
+    corrections: "Corrections", nativeExplain: "Explications dans ma langue maternelle (sinon dans la langue pratiquée)",
     newChat: "Nouvelle conversation", example: "Exemple", correction: "Correction", understood: "Compris : ", replay: "Réécouter",
     listenEnd: "Parlez, prenez votre temps. Dites « {w} » pour terminer.", listenSilence: "Parlez. J'envoie après un court silence, ou touchez le micro.",
     heardNothing: "Je n'ai rien entendu. Touchez le micro pour parler.", interruptHint: "Touchez le micro pour couper la parole.",
@@ -286,6 +305,9 @@ const I18N = {
     err5xx: "Le service Claude est surchargé. Réessayez dans un instant.", errNotGranted: "Accès à Claude refusé pour cette page. Autorisez-le pour continuer.",
     errRateLimited: "Limite d'utilisation atteinte. Réessayez plus tard.", errSession: "Session Claude expirée : reconnectez-vous.",
     errGeneric: "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.",
+    promptLabel: "Instructions pour Claude",
+    promptHelp: "Décrivez comment Claude doit discuter et corriger. Remplacés automatiquement : {langue}, {langue_maternelle}, {niveau}, {sujet}, {longueur_réponse}, {langue_explications}. Le format technique (commandes vocales, mot de fin, relevé des fautes) est ajouté par l'appli.",
+    promptReset: "Rétablir le texte d'origine", noted: "Noté : ", resumeHint: "Touchez le micro pour reprendre la conversation.",
     callMode: "Mode appel Bluetooth", callModeLabel: "Utiliser le micro et les haut-parleurs de la voiture, comme pour un appel",
     callModeHelp: "Pendant la conversation, le téléphone passe le Bluetooth en mode appel. Le son est de qualité téléphone.",
     routeCar: "Son : {name} (Bluetooth)", routePhone: "Son : téléphone",
@@ -317,7 +339,7 @@ const I18N = {
     patience: "Silence before sending:", patienceHelp: "Only used without an end word.",
     carMode: "Car mode", carModeLabel: "Large display, short replies, longer listening",
     carModeHelp: "The screen stays on during the conversation. Voice commands: ask Claude to repeat, speak more slowly or faster, change the subject or pause.",
-    corrections: "Corrections", nativeExplain: "Explanations in my native language (otherwise in the language I practise)", speakFix: "Read the correction aloud",
+    corrections: "Corrections", nativeExplain: "Explanations in my native language (otherwise in the language I practise)",
     newChat: "New conversation", example: "Example", correction: "Correction", understood: "Understood: ", replay: "Replay",
     listenEnd: "Speak, take your time. Say \"{w}\" to finish.", listenSilence: "Speak. I'll send after a short silence, or tap the mic.",
     heardNothing: "I didn't hear anything. Tap the mic to talk.", interruptHint: "Tap the mic to interrupt.",
@@ -335,6 +357,9 @@ const I18N = {
     err5xx: "Claude is overloaded. Try again in a moment.", errNotGranted: "This page isn't allowed to use Claude. Allow it to continue.",
     errRateLimited: "Usage limit reached. Try again later.", errSession: "Your Claude session expired: sign in again.",
     errGeneric: "Couldn't reach Claude. Check your connection and try again.",
+    promptLabel: "Instructions for Claude",
+    promptHelp: "Describe how Claude should talk and correct you. Filled in automatically: {language}, {native}, {level}, {topic}, {reply_length}, {explanation_language}. The app adds the technical part (voice commands, end word, mistake tracking).",
+    promptReset: "Restore the original text", noted: "Noted: ", resumeHint: "Tap the mic to resume the conversation.",
     callMode: "Bluetooth call mode", callModeLabel: "Use the car's microphone and speakers, as for a phone call",
     callModeHelp: "During the conversation, the phone switches Bluetooth to call mode. Sound is phone-call quality.",
     routeCar: "Audio: {name} (Bluetooth)", routePhone: "Audio: phone",
@@ -354,23 +379,32 @@ const tn = (k, v) => fill(I18N[settings.native]?.[k] ?? I18N.en[k] ?? k, v);  //
 // ---------- languages ----------
 // name: how the tutor prompt names the language; end: default end word; tip: spoken before a correction.
 const LANGS = {
-  "en-US": { label: { fr: "Anglais (américain)", en: "English (American)" }, name: "American English", end: "over", tip: "Quick tip: you can say",
+  "en-US": { ex: ["Oh, you mean you *went* to the cinema?", "You *went* there last week? Nice…", "Small thing: we'd say 'I *went*', not 'I have went'.", "By the way, you often say … — it's …"],
+    label: { fr: "Anglais (américain)", en: "English (American)" }, name: "American English", end: "over", tip: "Quick tip: you can say",
     example: ["Hi! What did you do last weekend?", "I have went to the cinema with my sister.", "I have went", "I went", { fr: "Pour une action terminée à un moment précis, on utilise le prétérit.", en: "For a finished action at a specific time, use the simple past." }, "Nice! What movie did you see, and would you recommend it?"] },
-  "en-GB": { label: { fr: "Anglais (britannique)", en: "English (British)" }, name: "British English", end: "over", tip: "Quick tip: you can say",
+  "en-GB": { ex: ["Oh, you mean you *went* to the cinema?", "You *went* there last week? Nice…", "Small thing: we'd say 'I *went*', not 'I have went'.", "By the way, you often say … — it's …"],
+    label: { fr: "Anglais (britannique)", en: "English (British)" }, name: "British English", end: "over", tip: "Quick tip: you can say",
     example: ["Hi! What did you get up to at the weekend?", "I have went to the cinema with my sister.", "I have went", "I went", { fr: "Pour une action terminée à un moment précis, on utilise le prétérit.", en: "For a finished action at a specific time, use the simple past." }, "Lovely! What film did you see?"] },
-  "es-ES": { label: { fr: "Espagnol (Espagne)", en: "Spanish (Spain)" }, name: "Spanish as spoken in Spain", end: "cambio", tip: "Un consejo: puedes decir",
+  "es-ES": { ex: ["Ah, ¿quieres decir que la película era muy *aburrida*?", "¿Era *aburrida*? Vaya…", "Un detalle: decimos 'muy *aburrida*', no 'muy aburrido'.", "Por cierto, a menudo dices … — se dice …"],
+    label: { fr: "Espagnol (Espagne)", en: "Spanish (Spain)" }, name: "Spanish as spoken in Spain", end: "cambio", tip: "Un consejo: puedes decir",
     example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", { fr: "« Película » est féminin : l'adjectif s'accorde.", en: "\"Película\" is feminine, so the adjective agrees." }, "¡Vaya! ¿Qué película era?"] },
-  "es-MX": { label: { fr: "Espagnol (Mexique)", en: "Spanish (Mexico)" }, name: "Mexican Spanish", end: "cambio", tip: "Un consejo: puedes decir",
+  "es-MX": { ex: ["Ah, ¿quieres decir que la película era muy *aburrida*?", "¿Era *aburrida*? Vaya…", "Un detalle: decimos 'muy *aburrida*', no 'muy aburrido'.", "Por cierto, a menudo dices … — se dice …"],
+    label: { fr: "Espagnol (Mexique)", en: "Spanish (Mexico)" }, name: "Mexican Spanish", end: "cambio", tip: "Un consejo: puedes decir",
     example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", { fr: "« Película » est féminin : l'adjectif s'accorde.", en: "\"Película\" is feminine, so the adjective agrees." }, "¡Qué mala onda! ¿Qué película era?"] },
-  "de-DE": { label: { fr: "Allemand", en: "German" }, name: "German", end: "fertig", tip: "Kleiner Tipp: Du kannst sagen",
+  "de-DE": { ex: ["Ah, du meinst, du *bist* ins Kino gegangen?", "Du *bist* also ins Kino gegangen? Schön…", "Kleine Sache: man sagt 'ich *bin* gegangen', nicht 'ich habe gegangen'.", "Übrigens, du sagst oft … — richtig ist …"],
+    label: { fr: "Allemand", en: "German" }, name: "German", end: "fertig", tip: "Kleiner Tipp: Du kannst sagen",
     example: ["Hallo! Was hast du am Wochenende gemacht?", "Ich habe ins Kino gegangen mit meiner Schwester.", "Ich habe ins Kino gegangen", "Ich bin ins Kino gegangen", { fr: "« Gehen » forme son parfait avec « sein ».", en: "\"Gehen\" forms its perfect tense with \"sein\"." }, "Schön! Welchen Film habt ihr gesehen?"] },
-  "it-IT": { label: { fr: "Italien", en: "Italian" }, name: "Italian", end: "passo", tip: "Un consiglio: puoi dire",
+  "it-IT": { ex: ["Ah, vuoi dire che *sei* andato al cinema?", "*Sei* andato al cinema? Bello…", "Piccola cosa: si dice '*sono* andato', non 'ho andato'.", "A proposito, dici spesso … — si dice …"],
+    label: { fr: "Italien", en: "Italian" }, name: "Italian", end: "passo", tip: "Un consiglio: puoi dire",
     example: ["Ciao! Cosa hai fatto nel fine settimana?", "Ho andato al cinema con mia sorella.", "Ho andato", "Sono andato", { fr: "« Andare » se conjugue avec « essere » au passé composé.", en: "\"Andare\" takes \"essere\" in the passato prossimo." }, "Bello! Che film avete visto?"] },
-  "pt-BR": { label: { fr: "Portugais (Brésil)", en: "Portuguese (Brazil)" }, name: "Brazilian Portuguese", end: "câmbio", tip: "Uma dica: você pode dizer",
+  "pt-BR": { ex: ["Ah, você quer dizer que *foi* ao cinema?", "Você *foi* ao cinema no sábado? Legal…", "Só um detalhe: a gente diz 'eu *fui*', não 'eu tenho ido'.", "Aliás, você costuma dizer … — o certo é …"],
+    label: { fr: "Portugais (Brésil)", en: "Portuguese (Brazil)" }, name: "Brazilian Portuguese", end: "câmbio", tip: "Uma dica: você pode dizer",
     example: ["Oi! O que você fez no fim de semana?", "Eu tenho ido ao cinema com minha irmã no sábado.", "Eu tenho ido", "Eu fui", { fr: "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", en: "For a one-off past action, use the pretérito perfeito." }, "Que legal! Que filme vocês viram?"] },
-  "pt-PT": { label: { fr: "Portugais (Portugal)", en: "Portuguese (Portugal)" }, name: "European Portuguese", end: "câmbio", tip: "Uma dica: pode dizer",
+  "pt-PT": { ex: ["Ah, queres dizer que *foste* ao cinema?", "*Foste* ao cinema no sábado? Giro…", "Só um pormenor: diz-se 'eu *fui*', não 'eu tenho ido'.", "Já agora, dizes muitas vezes … — diz-se …"],
+    label: { fr: "Portugais (Portugal)", en: "Portuguese (Portugal)" }, name: "European Portuguese", end: "câmbio", tip: "Uma dica: pode dizer",
     example: ["Olá! O que fizeste no fim de semana?", "Eu tenho ido ao cinema com a minha irmã no sábado.", "Eu tenho ido", "Eu fui", { fr: "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", en: "For a one-off past action, use the pretérito perfeito." }, "Que giro! Que filme viram?"] },
-  "nl-NL": { label: { fr: "Néerlandais", en: "Dutch" }, name: "Dutch", end: "over", tip: "Een tip: je kunt zeggen",
+  "nl-NL": { ex: ["O, je bedoelt dat je naar de bioscoop *bent* gegaan?", "Je *bent* naar de bioscoop gegaan? Leuk…", "Kleinigheidje: we zeggen 'ik *ben* gegaan', niet 'ik heb gegaan'.", "Trouwens, je zegt vaak … — het is …"],
+    label: { fr: "Néerlandais", en: "Dutch" }, name: "Dutch", end: "over", tip: "Een tip: je kunt zeggen",
     example: ["Hoi! Wat heb je in het weekend gedaan?", "Ik heb naar de bioscoop gegaan met mijn zus.", "Ik heb naar de bioscoop gegaan", "Ik ben naar de bioscoop gegaan", { fr: "« Gaan » forme son parfait avec « zijn ».", en: "\"Gaan\" forms its perfect tense with \"zijn\"." }, "Leuk! Welke film hebben jullie gezien?"] },
 };
 const L = () => LANGS[settings.lang] || LANGS["en-US"];
@@ -380,7 +414,7 @@ const stored = store.get("settings", {});
 const browserFr = /^fr\b/i.test(navigator.language || "");
 const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
-  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, speakFix: true, handsFree: true, carMode: false, callMode: true,
+  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true,
   ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
 }, stored);
 delete settings.accent; delete settings.frExplain;
@@ -410,7 +444,7 @@ function bindSetting(id, key, kind = "value") {
   });
 }
 [["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
-[["nativeExplain","nativeExplain"],["callMode","callMode"],["speakFix","speakFix"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
+[["nativeExplain","nativeExplain"],["callMode","callMode"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
 $("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
 $("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
 $("rateVal").textContent = settings.rate; $("patienceVal").textContent = settings.patience;
@@ -422,10 +456,12 @@ function onSettingChange(key) {
     prevLang = settings.lang;
     fillVoices();
     if (!turns.length) renderExample();
+    renderPrompt();
   }
   if (key === "carMode") renderCar();
   if (key === "callMode" && NATIVE && active) { NATIVE.setConversationActive(false, false); NATIVE.setConversationActive(true, settings.callMode) }
   if (key === "ui") applyI18n();
+  if (["level", "topic", "carMode", "nativeExplain", "native"].includes(key)) renderPrompt();
   if ((key === "native" || key === "nativeExplain") && !turns.length) renderExample();
   if (key === "apiKey") renderMode();
   if (key === "endWord") renderEndWord();
@@ -454,48 +490,137 @@ function renderMode() {
   }
 }
 
+// ---------- what Claude is told ----------
+// The visible part is editable in Settings; {placeholders} are filled from the settings.
+const PROMPT_TEMPLATES = {
+  fr: `Tu es Fluent, un ami avec qui je discute en {langue}. Je suis un adulte de langue maternelle {langue_maternelle}, niveau {niveau} (CECRL). Parle toujours en {langue}.
+Sujet : {sujet}.
+
+CONVERSATION
+- Parle comme une vraie personne, pas comme un prof ni un intervieweur.
+- Varie ce que tu fais : réagis, raconte une petite histoire, donne ton avis, sois en désaccord, plaisante, rebondis sur un détail que j'ai mentionné, ou lance toi-même un nouveau sujet.
+- Pose une question au maximum une réponse sur deux, et seulement quand elle vient naturellement. Souvent, fais juste une remarque et laisse-moi réagir.
+- Suis le fil de la discussion au lieu de sauter d'un sujet à l'autre.
+- Longueur des réponses : {longueur_réponse}.
+
+ME COMPRENDRE
+- Mon texte vient d'une reconnaissance vocale de mon accent {langue_maternelle}. Devine ce que je voulais dire.
+- Ne commente jamais ma prononciation et ne prends jamais une erreur de reconnaissance pour une faute.
+
+QUAND CORRIGER
+- Corrige tout de suite seulement les fautes importantes : le sens est flou ou faux, ou la phrase sonnerait vraiment bizarre pour un natif.
+- Laisse passer les petites fautes sur le moment. Corrige une petite faute quand j'ai fait le même type de faute 3 fois.
+- Jamais plus d'une correction par réponse, et pas à chaque réponse.
+
+COMMENT CORRIGER
+- Intègre la correction dans ta réponse, comme le ferait un ami, et varie la forme, par exemple :
+  · « [[EX1]] » (redis ma phrase entière corrigée)
+  · « [[EX2]] » (réutilise naturellement la bonne forme)
+  · « [[EX3]] »
+  · Pour une faute qui revient : « [[EX4]] »
+- Insiste sur le mot corrigé en le répétant ou en marquant une pause juste avant.
+- Puis continue la conversation naturellement.
+- Explications affichées à l'écran : une phrase courte en {langue_explications}.`,
+  en: `You are Fluent, a friend I chat with in {language}. I'm a {native}-speaking adult at CEFR level {level}. Always speak {language}.
+Topic: {topic}.
+
+CONVERSATION
+- Talk like a real person, not a teacher or an interviewer.
+- Vary what you do: react, tell a short story, give your opinion, disagree, joke, build on a detail I mentioned, or bring up something new yourself.
+- Ask a question at most every other turn, and only when it comes naturally. Often just make a statement and let me react.
+- Follow the thread of what we're talking about instead of jumping between topics.
+- Replies: {reply_length}.
+
+UNDERSTANDING ME
+- My text comes from speech recognition of a {native} accent. Work out what I meant.
+- Never comment on pronunciation or treat recognition errors as mistakes.
+
+WHEN TO CORRECT
+- Correct right away only important mistakes: the meaning is unclear, wrong, or it would really sound odd to a native speaker.
+- Let small mistakes go in the moment. Correct a small mistake once I've made the same kind 3 times.
+- Never more than one correction per reply, and not in every reply.
+
+HOW TO CORRECT
+- Weave the correction into your reply, the way a friend would, and vary the form, for example:
+  · "[[EX1]]" (repeat my whole sentence corrected)
+  · "[[EX2]]" (reuse the right form naturally)
+  · "[[EX3]]"
+  · For a repeated mistake: "[[EX4]]"
+- Stress the corrected word by repeating it or pausing before it.
+- Then carry on the conversation naturally.
+- Explanations shown on screen: one short sentence in {explanation_language}.`,
+};
+function defaultPrompt() {
+  const ex = L().ex;
+  return PROMPT_TEMPLATES[settings.ui].replace(/\[\[EX(\d)\]\]/g, (_, n) => ex[n - 1]);
+}
+const currentPrompt = () => settings.prompt || defaultPrompt();
+function promptVars() {
+  const fr = settings.ui === "fr";
+  const lang = fr ? L().label.fr.toLowerCase() : L().name;
+  const native = fr ? NATIVES[settings.native].label.fr.toLowerCase() : NATIVES[settings.native].name;
+  const topic = settings.topic || (fr ? "libre : vie quotidienne, travail, projets, opinions, histoires" : "anything: daily life, work, plans, opinions, stories");
+  const length = settings.carMode
+    ? (fr ? "1 ou 2 phrases courtes, faciles à suivre à l'oreille, car je conduis" : "1 or 2 short sentences, easy to follow by ear, because I'm driving")
+    : (fr ? "1 à 3 phrases courtes" : "1 to 3 short sentences");
+  const level = settings.level;
+  const expl = settings.nativeExplain ? native : lang;
+  return { langue: lang, language: lang, langue_maternelle: native, native, niveau: level, level, sujet: topic, topic,
+    "longueur_réponse": length, reply_length: length, langue_explications: expl, explanation_language: expl };
+}
+// The settings textarea shows the default text until the learner changes it.
+function renderPrompt() { if (document.activeElement !== $("prompt")) $("prompt").value = currentPrompt() }
+$("prompt").addEventListener("input", () => {
+  const v = $("prompt").value;
+  settings.prompt = v.trim() && v !== defaultPrompt() ? v : null;
+  saveSettings();
+});
+$("promptReset").addEventListener("click", () => { settings.prompt = null; saveSettings(); $("prompt").value = defaultPrompt() });
+
+// Small mistakes Claude let go, counted by type, so it can bring up the ones that keep coming back.
+let mistakeCounts = {};
+const tallyText = () => Object.entries(mistakeCounts).filter(([, n]) => n > 0)
+  .map(([k, n]) => `- ${k}: ${n} time${n > 1 ? "s" : ""}`).join("\n") || "- none yet";
+
 const ACTIONS = ["none", "repeat", "slower", "faster", "pause", "new_topic"];
 const SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["action", "understood", "has_mistake", "original", "corrected", "explanation", "reply"],
+  required: ["action", "understood", "mistake", "mistake_type", "original", "corrected", "explanation", "corrected_in_reply", "reply"],
   properties: {
     action: { type: "string", enum: ACTIONS },
     understood: { type: "string" },
-    has_mistake: { type: "boolean" },
+    mistake: { type: "string", enum: ["none", "minor", "major"] },
+    mistake_type: { type: "string" },
     original: { type: "string" }, corrected: { type: "string" }, explanation: { type: "string" },
+    corrected_in_reply: { type: "boolean" },
     reply: { type: "string" },
   },
 };
 
 function rules() {
-  const lang = L().name;
-  const topic = settings.topic || "anything the learner wants to talk about (daily life, work, plans, opinions, stories)";
-  const end = settings.endWord ? `\nThe learner ends each turn by saying "${settings.endWord}". If that word, or something that sounds like it, is left at the end of a message, ignore it.` : "";
-  const length = settings.carMode
-    ? "1 or 2 short sentences, easy to follow by ear: the learner is driving and only listens"
-    : "1 to 3 short sentences";
-  const native = NATIVES[settings.native].name;
-  return `You are Fluent, a conversation partner in ${lang} for a ${native}-speaking adult learner at CEFR level ${settings.level}. Always speak ${lang}.
-Topic: ${topic}.
+  const visible = fill(currentPrompt(), promptVars());
+  const lang = L().name, native = NATIVES[settings.native].name;
+  const end = settings.endWord ? `\n- The learner ends each turn by saying "${settings.endWord}". If that word, or something that sounds like it, is left at the end of a message, ignore it.` : "";
+  return `${visible}
 
-Be a real conversation partner, not an interviewer: react to what they actually said, pick up on details, share brief opinions, experiences or surprising facts of your own, disagree sometimes, and vary your questions. Keep the exchange interesting and natural, the way a curious friend would talk.
+---
+APP INSTRUCTIONS (always follow these; everything above is the learner's own setup and wins on style):
+- Speech recognition: when available, other recognizer hypotheses are listed after the transcript. Use them to work out what the learner meant.${end}
+- Voice commands: if the learner asks you, in ${lang} or in ${native}, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic" and "mistake" to "none". For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", bring up a new subject. Otherwise "action" is "none".
+- Small mistakes the learner made that you have not corrected yet, by type:
+${tallyText()}
 
-How the learner's messages reach you: they speak ${lang} with a marked ${native} accent and the text comes from automatic speech recognition, which often mishears accented speech (sounds ${native} speakers typically confuse, wrong word boundaries, ${native} words slipping in). When available, other recognizer hypotheses are listed after the transcript. Work out what they most plausibly meant from context, the hypotheses and typical ${native}-accent confusions. They do not want pronunciation feedback: never treat recognition errors or accent as mistakes and never mention pronunciation. If you truly cannot tell what they meant, say so naturally in your reply and ask them to say it another way.${end}
-
-Voice commands: if the learner asks you, in ${lang} or in ${native}, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic", with has_mistake false. For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", propose a new subject with a question. Otherwise "action" is "none".
-
-For each learner message, return JSON with:
+Return JSON:
 - action: as above.
 - understood: the sentence you believe they meant, keeping their own wording and grammar and fixing only speech-recognition errors.
-- has_mistake: true only if "understood" contains a real grammar, vocabulary or phrasing error that a teacher would correct at this level.
-- original: the wrong fragment from "understood" (a few words), else "".
-- corrected: the natural corrected version of that fragment, else "".
-- explanation: one short sentence explaining the rule, in ${settings.nativeExplain ? native : `simple ${lang}`}; else "".
-- reply: ${length} of natural spoken ${lang} at the learner's level, ending with something that invites them to keep talking (usually one question). Do not repeat the correction in reply. No markdown, lists or emoji: it is read aloud.
-Correct only the single most useful mistake per message.`;
+- mistake: "none", "minor" or "major", for the most useful mistake in "understood" (never recognition errors or pronunciation).
+- mistake_type: a short English label for that kind of mistake (for example "present perfect for finished past", "article", "preposition", "adjective agreement"). Reuse the exact labels from the list above when it is the same kind. "" if none.
+- original: the wrong fragment (a few words), corrected: its natural correction, explanation: one short sentence on the rule as described above. All "" if none.
+- corrected_in_reply: true only if your reply corrects that mistake out loud.
+- reply: what you say, read aloud by a speech synthesizer. Plain spoken text: no markdown, lists or emoji, except *asterisks* around the word you stress when you correct.`;
 }
 
-const OPENING = "(The learner just opened the app. Greet them briefly and ask an easy, engaging opening question about the topic. action is \"none\", understood is \"\" and has_mistake is false.)";
+const OPENING = "(The learner just opened the app. Greet them briefly and start the conversation about the topic in a natural, engaging way. action is \"none\", understood is \"\" and mistake is \"none\".)";
 let turns = [];  // {role, content} — what the tutor and learner actually said
 
 async function askTutor() {
@@ -506,7 +631,7 @@ async function askTutor() {
     const input = [{ role: "user", content: rules() + "\n\nReply with only the JSON object. The conversation follows." }, ...recent];
     return await sample.json(input, { modelTier: "default", effort: "low", cache: false });
   }
-  if (!settings.apiKey) { openSheet("settingsSheet"); throw { userMessage: "Ajoutez votre clé API Anthropic dans les réglages." } }
+  if (!settings.apiKey) { openSheet("settingsSheet"); throw { userMessage: t("errNoKey") } }
   if (!anthropic) {
     const { default: Anthropic } = await import("https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0/+esm");
     anthropic = new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
@@ -519,9 +644,9 @@ async function askTutor() {
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
     ...fallback,
   });
-  if (res.stop_reason === "refusal") throw { userMessage: "Claude a refusé de répondre à ce message. Essayez de reformuler." };
+  if (res.stop_reason === "refusal") throw { userMessage: t("errRefusal") };
   const text = res.content.find((b) => b.type === "text")?.text;
-  if (!text) throw { userMessage: "Réponse vide. Réessayez." };
+  if (!text) throw { userMessage: t("errEmpty") };
   return JSON.parse(text);
 }
 
@@ -818,19 +943,54 @@ function showInterim(text) {
 }
 function clearInterim() { interimEl?.remove(); interimEl = null }
 
-function addMe(text) { const turn = el("div", "turn me"); turn.append(el("div", "bubble", text)); $("log").append(turn); scrollDown(); return turn }
-function addUnderstood(meEl, understood, said) {
-  if (!meEl || !understood || norm(understood) === norm(said)) return;
-  meEl.append(el("div", "understood", t("understood") + understood));
+// ---------- saved conversation ----------
+// turns: what Claude is sent; log: what the screen shows. Both survive closing the app.
+let log = [];
+function saveConversation() {
+  turns = turns.slice(-60);
+  log = log.slice(-150);
+  store.set("conversation", { turns, log, counts: mistakeCounts, lastReply });
 }
-function addTutor(data) {
+// Claude marks the stressed word of a correction with *asterisks*: highlighted on screen, plain when spoken.
+const spoken = (text) => text.replace(/\*([^*]+)\*/g, "$1");
+function richText(node, text) {
+  text.split(/\*([^*]+)\*/).forEach((part, i) => node.append(i % 2 ? el("strong", null, part) : part));
+  return node;
+}
+function renderEntry(entry) {
+  if (entry.k === "notice") return el("div", "notice", entry.text);
+  if (entry.k === "me") {
+    const turn = el("div", "turn me" + (entry.failed ? " failed" : ""));
+    turn.append(el("div", "bubble", entry.text));
+    if (entry.understood) turn.append(el("div", "understood", t("understood") + entry.understood));
+    if (entry.noted) {
+      const n = el("div", "noted", t("noted"));
+      n.append(entry.noted.original ? entry.noted.original + " → " : "", el("mark", null, entry.noted.corrected));
+      turn.append(n);
+    }
+    return turn;
+  }
   const turn = el("div", "turn tutor");
-  if (data.has_mistake && data.corrected) turn.append(fixEl(data, "div", "fix"));
-  turn.append(el("div", "bubble", data.reply));
+  if (entry.fix) turn.append(fixEl(entry.fix, "div", "fix"));
+  turn.append(richText(el("div", "bubble"), entry.reply));
   const again = el("button", "replay", t("replay")); again.type = "button";
-  again.onclick = () => speak(data.reply);
+  again.onclick = () => speak(spoken(entry.reply));
   turn.append(again);
-  $("log").append(turn); scrollDown();
+  return turn;
+}
+function addEntry(entry) {
+  ensureStarted();
+  log.push(entry);
+  const node = renderEntry(entry);
+  $("log").append(node);
+  scrollDown();
+  saveConversation();
+  return node;
+}
+function renderLog() {
+  $("log").innerHTML = "";
+  for (const entry of log) $("log").append(renderEntry(entry));
+  scrollDown();
 }
 function fixEl(d, tag, cls) {
   const f = el(tag, cls);
@@ -840,7 +1000,7 @@ function fixEl(d, tag, cls) {
   if (d.explanation) f.append(el("span", "why", d.explanation));
   return f;
 }
-function addNotice(text) { ensureStarted(); $("log").append(el("div", "notice", text)); scrollDown() }
+function addNotice(text) { addEntry({ k: "notice", text }) }
 
 // ---------- conversation loop ----------
 // What Claude receives for a spoken turn: the transcript plus the recognizer's other hypotheses.
@@ -858,7 +1018,8 @@ async function send(text, alts) {
   ensureStarted();
   setActive(true);
   const opening = text === OPENING;
-  const meEl = opening ? null : addMe(text);
+  const meEntry = opening ? null : { k: "me", text };
+  let meEl = meEntry ? addEntry(meEntry) : null;
   turns.push({ role: "user", content: opening ? OPENING : packTurn(text, alts) });
   setState("thinking", "");
   let data;
@@ -874,9 +1035,9 @@ async function send(text, alts) {
         continue;
       }
       turns.pop();
-      meEl?.classList.add("failed");
+      if (meEntry) { meEntry.failed = true; meEl.classList.add("failed") }
       addNotice(errorText(e));
-      if (opening) { turns = []; setActive(false); setState("idle", t("retryHint")); return }
+      if (opening) { turns = []; saveConversation(); setActive(false); setState("idle", t("retryHint")); return }
       await say("sayFail");
       if (settings.handsFree && !micBlocked) listen(); else setState("idle", t("retryHint"));
       return;
@@ -885,9 +1046,9 @@ async function send(text, alts) {
   const action = ACTIONS.includes(data.action) ? data.action : "none";
   if (action === "repeat") {
     turns.pop();  // the command itself is not part of the conversation
-    meEl?.remove();
+    if (meEntry) { log.splice(log.indexOf(meEntry), 1); meEl.remove(); saveConversation() }
     setState("speaking", t("interruptHint"));
-    await speak(lastReply);
+    await speak(spoken(lastReply));
     return afterSpeaking();
   }
   if (action === "slower" || action === "faster") {
@@ -895,13 +1056,29 @@ async function send(text, alts) {
     $("rate").value = settings.rate; $("rateVal").textContent = settings.rate; saveSettings();
   }
   turns.push({ role: "assistant", content: data.reply || "OK." });
-  if (action === "none") addUnderstood(meEl, data.understood, text);
-  if (data.reply) { addTutor(data); lastReply = data.reply }
-  if (action === "none" && data.has_mistake && data.corrected) saveNote(data);
+
+  const mistake = action === "none" && ["minor", "major"].includes(data.mistake) && data.corrected ? data.mistake : null;
+  const fix = mistake ? { original: data.original, corrected: data.corrected, explanation: data.explanation } : null;
+  if (meEntry && action === "none") {
+    if (data.understood && norm(data.understood) !== norm(text)) meEntry.understood = data.understood;
+    if (fix && !data.corrected_in_reply) meEntry.noted = fix;  // let go for now, shown quietly
+    const fresh = renderEntry(meEntry); meEl.replaceWith(fresh); meEl = fresh;
+  }
+  // Small mistakes Claude lets go are counted; correcting one out loud resets its count.
+  const type = (data.mistake_type || "").trim();
+  if (mistake === "minor" && type) {
+    if (data.corrected_in_reply) delete mistakeCounts[type];
+    else mistakeCounts[type] = (mistakeCounts[type] || 0) + 1;
+  }
+  if (fix) saveNote(fix);
+  if (data.reply) {
+    addEntry({ k: "tutor", reply: data.reply, fix: data.corrected_in_reply ? fix : null });
+    lastReply = data.reply;
+  }
+  saveConversation();
+
   setState("speaking", t("interruptHint"));
-  if (action === "none" && settings.speakFix && data.has_mistake && data.corrected) await speak(`${L().tip}: ${data.corrected}.`);
-  if (state !== "speaking") return;
-  await speak(data.reply);
+  await speak(spoken(data.reply));
   if (action === "pause") { setActive(false); setState("idle", t("pausedHint")); return }
   afterSpeaking();
 }
@@ -948,7 +1125,9 @@ $("typed").addEventListener("submit", (e) => {
   send(v);
 });
 $("newChat").addEventListener("click", () => {
-  synth?.cancel(); stopListening(true); setActive(false); turns = []; lastReply = "";
+  synth?.cancel(); stopListening(true); setActive(false);
+  turns = []; log = []; mistakeCounts = {}; lastReply = "";
+  store.set("conversation", null);
   $("log").innerHTML = ""; started = true; closeSheets();
   setState("idle", t("newChatHint"));
 });
@@ -1012,13 +1191,23 @@ function applyI18n() {
   renderMode();
   renderEndWord();
   renderNotes();
-  if (!turns.length) renderExample();
+  renderPrompt();
+  if (log.length) renderLog(); else if (!turns.length) renderExample();
   setState(state);
+}
+// Pick up the previous conversation where it stopped.
+const savedConversation = store.get("conversation", null);
+if (savedConversation?.log?.length) {
+  turns = savedConversation.turns || [];
+  log = savedConversation.log;
+  mistakeCounts = savedConversation.counts || {};
+  lastReply = savedConversation.lastReply || "";
+  started = true;
 }
 renderCar();
 $("callField").hidden = !NATIVE;
 applyI18n();
-$("hint").textContent = SR ? t("startHint") : t("noSRHint");
+$("hint").textContent = log.length ? t("resumeHint") : SR ? t("startHint") : t("noSRHint");
 </script>
 </body>
 </html>

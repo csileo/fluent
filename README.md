@@ -9,6 +9,8 @@ Available languages: English (American, British), Spanish (Spain, Mexico), Germa
 - **End word**: Fluent keeps listening until you say your end word, even if you pause. Each language has a default end word, which you can change in **Settings**. If you leave it empty, your message is sent after a short silence.
 - **Accent**: Claude receives the transcript along with the speech recognizer's other hypotheses. It works out what you meant and shows it under your message ("Understood: …"). It never corrects pronunciation.
 - **Hands-free**: after each reply has been read aloud, Fluent starts listening again.
+- **Instructions for Claude**: in **Settings**, the full text that tells Claude how to talk and when and how to correct you is editable (in French or English, with placeholders such as `{language}` or `{level}`). By default Claude chats like a friend, corrects important mistakes right away, lets small ones go and brings them up once the same kind comes back 3 times, weaving the correction into its reply.
+- **Saved conversation**: settings, notebook and the current conversation are kept when you close the app; **New conversation** starts over.
 - **Voice commands**: ask Claude, in the language you are practising or in your native language, to repeat, to speak more slowly or faster, to change the subject or to pause.
 
 ## Car mode
