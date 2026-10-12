@@ -1,0 +1,47 @@
+name: Android APK
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Build web page
+        run: ./build.sh
+
+      - name: Build APK
+        run: gradle -p android assembleDebug --console=plain
+
+      # Replaces the "latest" release so the download link never changes:
+      # https://github.com/<owner>/<repo>/releases/latest/download/fluent.apk
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk fluent.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest fluent.apk \
+            --title "Fluent build ${{ github.run_number }}" \
+            --notes "Android build ${{ github.run_number }} from ${{ github.sha }}." \
+            --latest

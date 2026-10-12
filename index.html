@@ -98,6 +98,8 @@ form.typed button { border: 0; background: var(--ink); color: var(--paper); bord
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 12px; font-size: .9rem }
 .btn.danger { color: var(--danger) }
 .empty { color: var(--muted); font-size: .92rem }
+.route { margin: 0; text-align: center; font-size: .82rem; font-weight: 700; color: var(--muted) }
+.route[data-route="bluetooth"] { color: var(--accent) }
 .big-state { display: none; text-align: center; font: 800 1.7rem/1.15 var(--font-display); margin: 0 }
 .big-state[data-state="listening"] { color: var(--listen) }
 .big-state[data-state="speaking"], .big-state[data-state="thinking"] { color: var(--accent) }
@@ -125,6 +127,7 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
   <div class="talkbar">
     <p class="big-state" id="bigState" data-state="idle"></p>
     <p class="hint" id="hint"></p>
+    <p class="route" id="route" hidden></p>
     <div class="talk-row">
       <div class="side"><label class="switch"><input type="checkbox" id="handsFree" checked> <span data-i="handsFree">Mains libres</span></label></div>
       <button id="mic" type="button" data-state="idle">
@@ -213,6 +216,11 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
       <input id="patience" type="range" min="1" max="4" step="0.2" value="1.8">
       <small data-i="patienceHelp"></small>
     </div>
+    <div class="field" id="callField" hidden>
+      <span class="lab" data-i="callMode">Mode appel Bluetooth</span>
+      <label class="switch"><input type="checkbox" id="callMode" checked> <span data-i="callModeLabel"></span></label>
+      <small data-i="callModeHelp"></small>
+    </div>
     <div class="field">
       <span class="lab" data-i="carMode">Mode voiture</span>
       <label class="switch"><input type="checkbox" id="carMode"> <span data-i="carModeLabel"></span></label>
@@ -278,6 +286,9 @@ const I18N = {
     err5xx: "Le service Claude est surchargé. Réessayez dans un instant.", errNotGranted: "Accès à Claude refusé pour cette page. Autorisez-le pour continuer.",
     errRateLimited: "Limite d'utilisation atteinte. Réessayez plus tard.", errSession: "Session Claude expirée : reconnectez-vous.",
     errGeneric: "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.",
+    callMode: "Mode appel Bluetooth", callModeLabel: "Utiliser le micro et les haut-parleurs de la voiture, comme pour un appel",
+    callModeHelp: "Pendant la conversation, le téléphone passe le Bluetooth en mode appel. Le son est de qualité téléphone.",
+    routeCar: "Son : {name} (Bluetooth)", routePhone: "Son : téléphone",
     // spoken messages (native language)
     sayNetLost: "Réseau perdu, je réessaie.", sayNoNet: "Pas de réseau. Je me mets en pause.", sayIdle: "Je me mets en pause.",
     sayRetry: "Connexion difficile, je réessaie.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
@@ -324,6 +335,9 @@ const I18N = {
     err5xx: "Claude is overloaded. Try again in a moment.", errNotGranted: "This page isn't allowed to use Claude. Allow it to continue.",
     errRateLimited: "Usage limit reached. Try again later.", errSession: "Your Claude session expired: sign in again.",
     errGeneric: "Couldn't reach Claude. Check your connection and try again.",
+    callMode: "Bluetooth call mode", callModeLabel: "Use the car's microphone and speakers, as for a phone call",
+    callModeHelp: "During the conversation, the phone switches Bluetooth to call mode. Sound is phone-call quality.",
+    routeCar: "Audio: {name} (Bluetooth)", routePhone: "Audio: phone",
     sayNetLost: "Network lost, retrying.", sayNoNet: "No network. Pausing.", sayIdle: "Pausing.",
     sayRetry: "Poor connection, retrying.", sayFail: "I couldn't reach Claude. Please say that again.",
   },
@@ -366,7 +380,7 @@ const stored = store.get("settings", {});
 const browserFr = /^fr\b/i.test(navigator.language || "");
 const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
-  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, speakFix: true, handsFree: true, carMode: false,
+  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, speakFix: true, handsFree: true, carMode: false, callMode: true,
   ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
 }, stored);
 delete settings.accent; delete settings.frExplain;
@@ -396,7 +410,7 @@ function bindSetting(id, key, kind = "value") {
   });
 }
 [["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
-[["nativeExplain","nativeExplain"],["speakFix","speakFix"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
+[["nativeExplain","nativeExplain"],["callMode","callMode"],["speakFix","speakFix"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
 $("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
 $("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
 $("rateVal").textContent = settings.rate; $("patienceVal").textContent = settings.patience;
@@ -410,6 +424,7 @@ function onSettingChange(key) {
     if (!turns.length) renderExample();
   }
   if (key === "carMode") renderCar();
+  if (key === "callMode" && NATIVE && active) { NATIVE.setConversationActive(false, false); NATIVE.setConversationActive(true, settings.callMode) }
   if (key === "ui") applyI18n();
   if ((key === "native" || key === "nativeExplain") && !turns.length) renderExample();
   if (key === "apiKey") renderMode();
@@ -525,8 +540,41 @@ function errorText(e) {
   return "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.";
 }
 
+// ---------- Android app bridge ----------
+// Inside the Android app, window.FluentNative provides speech recognition, speech synthesis and
+// Bluetooth call-mode routing. Events come back through window.__fluentNative.onEvent.
+const NATIVE = window.FluentNative || null;
+const nativeRecs = {}, ttsWaiting = {};
+let nativeSeq = 0;
+window.__fluentNative = {
+  onEvent(e) {
+    if (e.type === "sr") {
+      const r = nativeRecs[e.id];
+      if (!r) return;
+      if (e.event === "partial" || e.event === "final") {
+        const res = (e.texts || []).map((t) => ({ transcript: t }));
+        res.isFinal = e.event === "final";
+        r.onresult?.({ resultIndex: 0, results: [res] });
+      } else if (e.event === "error") r.onerror?.({ error: e.error });
+      else if (e.event === "end") { delete nativeRecs[e.id]; r.onend?.() }
+    } else if (e.type === "tts") { ttsWaiting[e.id]?.(); delete ttsWaiting[e.id] }
+    else if (e.type === "voices") fillVoices();
+    else if (e.type === "route") renderRoute(e);
+  },
+};
+class NativeSpeechRecognition {
+  constructor() { this.id = ++nativeSeq; this.lang = "en-US"; this.maxAlternatives = 4 }
+  start() { nativeRecs[this.id] = this; NATIVE.startListening(this.id, this.lang, this.maxAlternatives) }
+  stop() { NATIVE.stopListening(this.id) }
+  abort() { NATIVE.cancelListening(this.id) }
+}
+
 // ---------- speech synthesis ----------
-const synth = window.speechSynthesis;
+const webSynth = window.speechSynthesis;
+const synth = NATIVE ? {
+  getVoices() { try { return JSON.parse(NATIVE.getVoices()) } catch { return [] } },
+  cancel() { NATIVE.stopSpeaking() },
+} : webSynth;
 let voices = [];
 const voicesFor = (code) => {
   const all = synth ? synth.getVoices() : [];
@@ -544,7 +592,8 @@ function fillVoices() {
   if (!voices.find((v) => v.name === settings.voice)) settings.voice = voices[0]?.name || "";
   sel.value = settings.voice;
 }
-function score(v) { return /natural|neural|online|premium|enhanced/i.test(v.name) * 3 + /google/i.test(v.name) * 2 }
+// Android voices that run on the device keep working in dead zones.
+function score(v) { return /natural|neural|online|premium|enhanced/i.test(v.name) * 3 + /google/i.test(v.name) * 2 + /local/i.test(v.name) }
 if (synth) { fillVoices(); synth.addEventListener?.("voiceschanged", fillVoices) }
 $("voice").addEventListener("change", (e) => { settings.voice = e.target.value; saveSettings() });
 
@@ -552,21 +601,35 @@ function speak(text, lang) {
   return new Promise((resolve) => {
     if (!synth || !text) return resolve();
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
     const v = lang ? voicesFor(lang)[0] : voices.find((x) => x.name === settings.voice);
+    const rate = lang ? 1 : settings.rate;
+    if (NATIVE) {
+      const id = ++nativeSeq;
+      ttsWaiting[id] = resolve;
+      NATIVE.speak(id, text, v?.lang || lang || settings.lang, v?.name || "", rate);
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(text);
     if (v) u.voice = v;
     u.lang = v?.lang || lang || settings.lang;
-    u.rate = lang ? 1 : settings.rate;
+    u.rate = rate;
     u.onend = u.onerror = () => resolve();
     synth.speak(u);
   });
 }
-// Spoken status messages, in French, so nothing needs to be read on screen while driving.
+// Spoken status messages, in the native language, so nothing needs to be read on screen while driving.
 const say = (key) => speak(tn(key), NATIVES[settings.native].voice);
 
 // ---------- keep the screen on during a conversation ----------
 let active = false, wakeLock = null;
 async function setActive(on) {
+  if (NATIVE) {
+    // The app keeps the screen on, runs a foreground service and switches Bluetooth to call mode.
+    if (on !== active) NATIVE.setConversationActive(on, !!settings.callMode);
+    active = on;
+    if (!on) $("route").hidden = true;
+    return;
+  }
   active = on;
   if (on && !wakeLock && navigator.wakeLock && document.visibilityState === "visible") {
     try { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null }) } catch {}
@@ -575,10 +638,18 @@ async function setActive(on) {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && active) setActive(true) });
 
+// Shows where sound goes: the car (Bluetooth call mode) or the phone.
+function renderRoute(e) {
+  const el = $("route");
+  el.hidden = !active;
+  el.dataset.route = e.route;
+  el.textContent = e.route === "bluetooth" ? t("routeCar", { name: e.name || "Bluetooth" }) : t("routePhone");
+}
+
 // ---------- speech recognition ----------
 // One listening "session" spans several recognizer runs: Chrome stops after a silence
 // (and on Android after every phrase), so we restart until the end word or the silence timeout.
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SR = NATIVE ? NativeSpeechRecognition : (window.SpeechRecognition || window.webkitSpeechRecognition);
 let rec = null, session = null, silenceTimer = 0, micBlocked = !SR;
 let state = "idle";
 const idleLimit = () => settings.carMode ? 600000 : 90000;  // stop listening after this long without speech
@@ -844,7 +915,7 @@ function afterSpeaking() {
 function start() {
   ensureStarted();
   // A first speak() inside the tap unlocks audio on iOS.
-  if (synth) { const u = new SpeechSynthesisUtterance(""); synth.speak(u) }
+  if (webSynth && !NATIVE) { const u = new SpeechSynthesisUtterance(""); webSynth.speak(u) }
   send(OPENING);
 }
 
@@ -945,6 +1016,7 @@ function applyI18n() {
   setState(state);
 }
 renderCar();
+$("callField").hidden = !NATIVE;
 applyI18n();
 $("hint").textContent = SR ? t("startHint") : t("noSRHint");
 </script>

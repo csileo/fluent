@@ -17,7 +17,23 @@ Turn it on in **Settings**. The display gets bigger, replies get shorter and Flu
 
 Keep Chrome in the foreground: if the screen locks or you switch apps, Android turns the microphone off.
 
-## Install on Android
+## Android app (recommended in the car)
+
+The Android app wraps the same interface and adds what a web page can't do:
+
+- **Bluetooth call mode**: during a conversation, the phone switches Bluetooth to call mode, so Fluent uses the car's microphone and speakers like a phone call (phone-call sound quality). Turn it off in **Settings** if you prefer.
+- **Native speech recognition and voices**, without Chrome's restarts.
+- A **foreground service** keeps the conversation running, with a notification while it lasts.
+
+Install:
+
+1. On the phone, open `https://github.com/csileo/fluent/releases/latest/download/fluent.apk` (sign in to GitHub if the repository is private) and open the downloaded file.
+2. Allow installing apps from this source when Android asks.
+3. Open Fluent, allow the microphone, nearby devices (Bluetooth) and notifications, then paste your Anthropic API key in **Settings**.
+
+Each push to `master` builds a new APK (GitHub Actions) that installs over the previous one. To build it yourself: `./build.sh && gradle -p android assembleDebug` with the Android SDK installed.
+
+## Install on Android (web version)
 
 1. Open the published page (GitHub Pages) in **Chrome**. The microphone only works on an HTTPS page.
 2. In **Settings**, paste an Anthropic API key (console.anthropic.com). It stays in the browser, and calls go straight from the browser to the Anthropic API.
