@@ -1,34 +1,34 @@
 # Fluent
 
-Fluent est un partenaire de conversation vocale pour pratiquer une langue étrangère. Vous parlez, Claude vous répond à voix haute et relance la discussion comme un vrai interlocuteur, en corrigeant une seule erreur à la fois. Les corrections s'enregistrent dans un carnet à revoir plus tard.
+Fluent is a voice conversation partner for practising a foreign language. You speak, Claude answers out loud and keeps the conversation going like a real person, correcting one mistake at a time. Corrections are saved to a notebook you can review later.
 
-Langues proposées : anglais (américain, britannique), espagnol (Espagne, Mexique), allemand, italien, portugais (Brésil, Portugal) et néerlandais. L'interface et les explications sont en français.
+Available languages: English (American, British), Spanish (Spain, Mexico), German, Italian, Portuguese (Brazil, Portugal) and Dutch. The interface and the explanations are in French.
 
-## Comment ça marche
+## How it works
 
-- **Mot de fin** : Fluent vous écoute tant que vous n'avez pas dit votre mot de fin, même si vous marquez des pauses. Chaque langue en propose un par défaut, modifiable dans **Réglages**. Laissé vide, l'envoi se fait après un silence.
-- **Accent** : Claude reçoit la transcription et les autres hypothèses de la reconnaissance vocale. Il reconstruit ce que vous vouliez dire et l'affiche sous votre message (« Compris : … »). Il ne corrige jamais la prononciation.
-- **Mains libres** : après chaque réponse lue, Fluent se remet à écouter.
-- **Commandes vocales** : demandez à Claude de répéter, de parler plus lentement ou plus vite, de changer de sujet ou de faire une pause, dans la langue pratiquée ou en français.
+- **End word**: Fluent keeps listening until you say your end word, even if you pause. Each language has a default end word, which you can change in **Réglages** (Settings). If you leave it empty, your message is sent after a short silence.
+- **Accent**: Claude receives the transcript along with the speech recognizer's other hypotheses. It works out what you meant and shows it under your message ("Compris : …"). It never corrects pronunciation.
+- **Hands-free**: after each reply has been read aloud, Fluent starts listening again.
+- **Voice commands**: ask Claude, in the language you are practising or in French, to repeat, to speak more slowly or faster, to change the subject or to pause.
 
-## Mode voiture
+## Car mode
 
-Activez-le dans **Réglages**. L'affichage est plus grand, les réponses plus courtes et l'écoute dure plus longtemps sans parole. L'écran reste allumé pendant la conversation. Après une coupure réseau, Fluent réessaie tout seul et vous prévient à voix haute, en français.
+Turn it on in **Réglages**. The display gets bigger, replies get shorter and Fluent keeps listening longer when you are silent. The screen stays on during the conversation. After a network drop, Fluent retries on its own and tells you out loud, in French.
 
-Gardez Chrome au premier plan : si l'écran se verrouille ou si vous changez d'appli, Android coupe le micro.
+Keep Chrome in the foreground: if the screen locks or you switch apps, Android turns the microphone off.
 
-## Installer sur Android
+## Install on Android
 
-1. Ouvrez la page publiée (GitHub Pages) dans **Chrome**. Le micro n'est autorisé que sur une page en HTTPS.
-2. Dans **Réglages**, collez une clé API Anthropic (console.anthropic.com). Elle reste dans le navigateur et les appels partent directement vers l'API Anthropic.
-3. Choisissez la langue, le niveau et une voix, puis touchez le micro.
-4. Le menu ⋮ → « Ajouter à l'écran d'accueil » donne une icône comme une appli.
+1. Open the published page (GitHub Pages) in **Chrome**. The microphone only works on an HTTPS page.
+2. In **Réglages**, paste an Anthropic API key (console.anthropic.com). It stays in the browser, and calls go straight from the browser to the Anthropic API.
+3. Pick the language, your level and a voice, then tap the microphone.
+4. Use the ⋮ menu → "Add to Home screen" to get an app-like icon.
 
-Chrome Android émet un petit bip à chaque relance de l'écoute : c'est le comportement du système.
+Chrome on Android plays a short beep each time listening restarts: that is the system's behaviour.
 
-## Développer
+## Development
 
-`app.html` est la seule source. Après une modification, régénérez la page autonome :
+`app.html` is the only source file. After editing it, rebuild the standalone page:
 
 ```sh
 ./build.sh
