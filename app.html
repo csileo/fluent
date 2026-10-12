@@ -108,106 +108,115 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
 <div class="app">
   <header>
     <h1 class="brand"><span>Fluent</span></h1>
-    <div class="status" id="status" aria-live="polite">Prêt</div>
-    <button class="icon-btn" id="openNotes" type="button" aria-label="Carnet de corrections">Carnet <span class="count" id="noteCount">0</span></button>
-    <button class="icon-btn" id="openSettings" type="button">Réglages</button>
+    <div class="status" id="status" aria-live="polite"></div>
+    <button class="icon-btn" id="openNotes" type="button" data-i-aria="notesTitle"><span data-i="notesBtn">Carnet</span> <span class="count" id="noteCount">0</span></button>
+    <button class="icon-btn" id="openSettings" type="button" data-i="settings">Réglages</button>
   </header>
 
   <main id="log" aria-live="polite"></main>
 
   <div class="talkbar">
-    <p class="big-state" id="bigState" data-state="idle">Prêt</p>
-    <p class="hint" id="hint">Appuyez sur le micro pour commencer la conversation.</p>
+    <p class="big-state" id="bigState" data-state="idle"></p>
+    <p class="hint" id="hint"></p>
     <div class="talk-row">
-      <div class="side"><label class="switch"><input type="checkbox" id="handsFree" checked> Mains libres</label></div>
-      <button id="mic" type="button" data-state="idle" aria-label="Parler">
+      <div class="side"><label class="switch"><input type="checkbox" id="handsFree" checked> <span data-i="handsFree">Mains libres</span></label></div>
+      <button id="mic" type="button" data-state="idle">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
       </button>
-      <div class="side"><button class="btn" id="stopAll" type="button">Pause</button></div>
+      <div class="side"><button class="btn" id="stopAll" type="button" data-i="pause">Pause</button></div>
     </div>
     <form class="typed" id="typed" autocomplete="off">
-      <input id="typedInput" type="text" placeholder="…ou écrivez / dictez au clavier" aria-label="Votre message">
-      <button type="submit">Envoyer</button>
+      <input id="typedInput" type="text" data-i-aria="yourMessage">
+      <button type="submit" data-i="send">Envoyer</button>
     </form>
   </div>
 </div>
 
 <div class="sheet" id="notesSheet" hidden>
   <div role="dialog" aria-modal="true" aria-labelledby="notesTitle">
-    <div class="sheet-head"><h2 id="notesTitle">Carnet de corrections</h2><button class="btn" data-close type="button">Fermer</button></div>
+    <div class="sheet-head"><h2 id="notesTitle" data-i="notesTitle">Carnet de corrections</h2><button class="btn" data-close type="button" data-i="close">Fermer</button></div>
     <ul class="notes" id="notes"></ul>
-    <p class="empty" id="notesEmpty">Vos erreurs corrigées apparaîtront ici, pour les revoir plus tard.</p>
+    <p class="empty" id="notesEmpty" data-i="notesEmpty"></p>
     <div class="row">
-      <button class="btn" id="copyNotes" type="button">Copier tout</button>
-      <button class="btn danger" id="clearNotes" type="button">Vider le carnet</button>
+      <button class="btn" id="copyNotes" type="button" data-i="copyAll">Copier tout</button>
+      <button class="btn danger" id="clearNotes" type="button" data-i="clearNotes">Vider le carnet</button>
     </div>
-    <p class="empty" id="clearConfirm" hidden>Vider le carnet ? <button class="btn danger" id="clearYes" type="button">Oui, vider</button> <button class="btn" id="clearNo" type="button">Annuler</button></p>
+    <p class="empty" id="clearConfirm" hidden><span data-i="clearAsk">Vider le carnet ?</span> <button class="btn danger" id="clearYes" type="button" data-i="clearYes">Oui, vider</button> <button class="btn" id="clearNo" type="button" data-i="cancel">Annuler</button></p>
   </div>
 </div>
 
 <div class="sheet" id="settingsSheet" hidden>
   <div role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-    <div class="sheet-head"><h2 id="settingsTitle">Réglages</h2><button class="btn" data-close type="button">Fermer</button></div>
-    <div class="mode" id="modeBox">Détection du mode…</div>
+    <div class="sheet-head"><h2 id="settingsTitle" data-i="settings">Réglages</h2><button class="btn" data-close type="button" data-i="close">Fermer</button></div>
+    <div class="field">
+      <label for="ui" data-i="uiLang">Langue de l'interface</label>
+      <select id="ui"><option value="fr">Français</option><option value="en">English</option></select>
+    </div>
+    <div class="mode" id="modeBox"></div>
     <div class="field" id="keyField">
-      <label for="apiKey">Clé API Anthropic</label>
+      <label for="apiKey" data-i="apiKey">Clé API Anthropic</label>
       <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off">
-      <small>Gardée uniquement dans ce navigateur. Créez-en une sur console.anthropic.com.</small>
+      <small data-i="apiKeyHelp"></small>
     </div>
     <div class="field" id="modelField">
-      <label for="model">Modèle</label>
+      <label for="model" data-i="model">Modèle</label>
       <select id="model">
-        <option value="claude-opus-5-5">Claude Opus 5.5 — meilleures corrections</option>
-        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — équilibré</option>
-        <option value="claude-haiku-5-5">Claude Haiku 5.5 — le plus rapide</option>
+        <option value="claude-opus-5-5" data-i="modelOpus">Claude Opus 5.5</option>
+        <option value="claude-sonnet-5-5" data-i="modelSonnet">Claude Sonnet 5.5</option>
+        <option value="claude-haiku-5-5" data-i="modelHaiku">Claude Haiku 5.5</option>
       </select>
     </div>
     <div class="field">
-      <label for="lang">Langue pratiquée</label>
+      <label for="lang" data-i="lang">Langue pratiquée</label>
       <select id="lang"></select>
     </div>
     <div class="field">
-      <label for="level">Votre niveau</label>
+      <label for="native" data-i="nativeLang">Votre langue maternelle</label>
+      <select id="native"></select>
+      <small data-i="nativeHelp"></small>
+    </div>
+    <div class="field">
+      <label for="level" data-i="level">Votre niveau</label>
       <select id="level">
-        <option value="A2">A2 — élémentaire</option>
-        <option value="B1" selected>B1 — intermédiaire</option>
-        <option value="B2">B2 — intermédiaire avancé</option>
-        <option value="C1">C1 — avancé</option>
+        <option value="A2" data-i="A2">A2</option>
+        <option value="B1" data-i="B1">B1</option>
+        <option value="B2" data-i="B2">B2</option>
+        <option value="C1" data-i="C1">C1</option>
       </select>
     </div>
     <div class="field">
-      <label for="topic">Sujet de conversation</label>
-      <input id="topic" type="text" placeholder="libre, voyage, entretien d'embauche, travail…">
+      <label for="topic" data-i="topic">Sujet de conversation</label>
+      <input id="topic" type="text" data-i-ph="topicPh">
     </div>
     <div class="field">
-      <label for="voice">Voix</label>
+      <label for="voice" data-i="voice">Voix</label>
       <select id="voice"></select>
     </div>
     <div class="field">
-      <label for="rate">Vitesse de la voix : <span id="rateVal">0.95</span></label>
+      <label for="rate"><span data-i="rate">Vitesse de la voix :</span> <span id="rateVal">0.95</span></label>
       <input id="rate" type="range" min="0.6" max="1.3" step="0.05" value="0.95">
     </div>
     <div class="field">
-      <label for="endWord">Mot de fin</label>
+      <label for="endWord" data-i="endWord">Mot de fin</label>
       <input id="endWord" type="text">
-      <small>Dites ce mot à la fin de votre phrase pour que Claude réponde. Fluent écoute jusque-là, même si vous faites des pauses. Prenez un mot court et distinct de la langue pratiquée ; chaque langue en propose un par défaut. Laissez vide pour envoyer après un silence.</small>
+      <small data-i="endWordHelp"></small>
     </div>
     <div class="field" id="patienceField">
-      <label for="patience">Silence avant envoi : <span id="patienceVal">1.8</span> s</label>
+      <label for="patience"><span data-i="patience">Silence avant envoi :</span> <span id="patienceVal">1.8</span> s</label>
       <input id="patience" type="range" min="1" max="4" step="0.2" value="1.8">
-      <small>Utilisé seulement sans mot de fin.</small>
+      <small data-i="patienceHelp"></small>
     </div>
     <div class="field">
-      <span class="lab">Mode voiture</span>
-      <label class="switch"><input type="checkbox" id="carMode"> Grand affichage, réponses courtes, écoute prolongée</label>
-      <small>L'écran reste allumé pendant la conversation. Commandes à la voix : demandez de répéter, de parler plus lentement ou plus vite, de changer de sujet ou de faire une pause.</small>
+      <span class="lab" data-i="carMode">Mode voiture</span>
+      <label class="switch"><input type="checkbox" id="carMode"> <span data-i="carModeLabel"></span></label>
+      <small data-i="carModeHelp"></small>
     </div>
     <div class="field">
-      <span class="lab">Corrections</span>
-      <label class="switch"><input type="checkbox" id="frExplain" checked> Explications en français (sinon dans la langue pratiquée)</label>
-      <label class="switch"><input type="checkbox" id="speakFix" checked> Lire la correction à voix haute</label>
+      <span class="lab" data-i="corrections">Corrections</span>
+      <label class="switch"><input type="checkbox" id="nativeExplain" checked> <span data-i="nativeExplain"></span></label>
+      <label class="switch"><input type="checkbox" id="speakFix" checked> <span data-i="speakFix"></span></label>
     </div>
-    <div class="row"><button class="btn" id="newChat" type="button">Nouvelle conversation</button></div>
+    <div class="row"><button class="btn" id="newChat" type="button" data-i="newChat">Nouvelle conversation</button></div>
   </div>
 </div>
 
@@ -218,41 +227,158 @@ const store = {
   set(k, v) { try { localStorage.setItem("fluent:" + k, JSON.stringify(v)) } catch {} },
 };
 
+// ---------- interface text ----------
+const I18N = {
+  fr: {
+    ready: "Prêt", listening: "Je vous écoute…", thinking: "Claude réfléchit…", speaking: "Claude parle…",
+    yourTurnWord: "À vous… (« {w} »)", notesBtn: "Carnet", settings: "Réglages", close: "Fermer",
+    startHint: "Appuyez sur le micro pour commencer la conversation.", handsFree: "Mains libres", pause: "Pause",
+    talk: "Parler", finishSend: "Terminer et envoyer", interrupt: "Interrompre et parler",
+    typedPh: "…ou écrivez / dictez au clavier", typedPhEnd: "…ou dictez au clavier, finissez par « {w} »",
+    yourMessage: "Votre message", send: "Envoyer",
+    notesTitle: "Carnet de corrections", notesEmpty: "Vos erreurs corrigées apparaîtront ici, pour les revoir plus tard.",
+    copyAll: "Copier tout", copied: "Copié", copyFailed: "Copie impossible", clearNotes: "Vider le carnet",
+    clearAsk: "Vider le carnet ?", clearYes: "Oui, vider", cancel: "Annuler",
+    uiLang: "Langue de l'interface",
+    modeClaude: "<b>Mode Claude.ai</b> : les réponses utilisent votre compte Claude, sans clé. Le micro de la page n'est pas accessible ici : dictez avec le micro de votre clavier dans le champ texte, en finissant par votre mot de fin. Pour la conversation vocale mains libres, ouvrez la version autonome dans Chrome.",
+    modeKey: "<b>Mode clé API</b> : les appels partent directement de ce navigateur vers l'API Anthropic.",
+    modeNoKey: "<b>Clé API requise</b> : collez votre clé Anthropic ci-dessous pour commencer.",
+    apiKey: "Clé API Anthropic", apiKeyHelp: "Gardée uniquement dans ce navigateur. Créez-en une sur console.anthropic.com.",
+    model: "Modèle", modelOpus: "Claude Opus 5.5 — meilleures corrections", modelSonnet: "Claude Sonnet 5.5 — équilibré", modelHaiku: "Claude Haiku 5.5 — le plus rapide",
+    lang: "Langue pratiquée", nativeLang: "Votre langue maternelle", nativeHelp: "Langue des explications et des messages vocaux de Fluent.",
+    level: "Votre niveau", A2: "A2 — élémentaire", B1: "B1 — intermédiaire", B2: "B2 — intermédiaire avancé", C1: "C1 — avancé",
+    topic: "Sujet de conversation", topicPh: "libre, voyage, entretien d'embauche, travail…", voice: "Voix",
+    rate: "Vitesse de la voix :", endWord: "Mot de fin",
+    endWordHelp: "Dites ce mot à la fin de votre phrase pour que Claude réponde. Fluent écoute jusque-là, même si vous faites des pauses. Prenez un mot court et distinct de la langue pratiquée ; chaque langue en propose un par défaut. Laissez vide pour envoyer après un silence.",
+    patience: "Silence avant envoi :", patienceHelp: "Utilisé seulement sans mot de fin.",
+    carMode: "Mode voiture", carModeLabel: "Grand affichage, réponses courtes, écoute prolongée",
+    carModeHelp: "L'écran reste allumé pendant la conversation. Commandes à la voix : demandez de répéter, de parler plus lentement ou plus vite, de changer de sujet ou de faire une pause.",
+    corrections: "Corrections", nativeExplain: "Explications dans ma langue maternelle (sinon dans la langue pratiquée)", speakFix: "Lire la correction à voix haute",
+    newChat: "Nouvelle conversation", example: "Exemple", correction: "Correction", understood: "Compris : ", replay: "Réécouter",
+    listenEnd: "Parlez, prenez votre temps. Dites « {w} » pour terminer.", listenSilence: "Parlez. J'envoie après un court silence, ou touchez le micro.",
+    heardNothing: "Je n'ai rien entendu. Touchez le micro pour parler.", interruptHint: "Touchez le micro pour couper la parole.",
+    pausedHint: "En pause. Touchez le micro pour reprendre.", idlePaused: "Écoute en pause faute de parole. Touchez le micro pour reprendre.",
+    retryHint: "Touchez le micro pour réessayer.", answerBelow: "Répondez dans le champ ci-dessous.", yourTurn: "À vous ! Touchez le micro pour répondre.",
+    newChatHint: "Nouvelle conversation. Appuyez sur le micro pour commencer.",
+    netLostHint: "Réseau perdu, je réessaie…", connHint: "Connexion difficile, je réessaie…",
+    noNetNotice: "Pas de réseau pour la reconnaissance vocale. Touchez le micro quand la connexion revient.",
+    noSRHint: "Appuyez sur le micro pour commencer (ou écrivez ci-dessous : la reconnaissance vocale demande Chrome ou Edge).",
+    noSRNotice: "La reconnaissance vocale n'est pas disponible dans ce navigateur. Utilisez Chrome ou Edge, ou la dictée de votre clavier dans le champ ci-dessous.",
+    micBlockedNotice: "Le micro est bloqué ici. Utilisez la dictée de votre clavier (touche micro du clavier du téléphone) dans le champ ci-dessous, ou ouvrez la version autonome de Fluent dans Chrome.",
+    errNoKey: "Ajoutez votre clé API Anthropic dans les réglages.", errRefusal: "Claude a refusé de répondre à ce message. Essayez de reformuler.",
+    errEmpty: "Réponse vide. Réessayez.", errUnreadable: "Réponse illisible. Renvoyez votre message.",
+    err401: "Clé API refusée. Vérifiez-la dans les réglages.", err429: "Trop de requêtes ou crédit épuisé. Attendez un peu.",
+    err5xx: "Le service Claude est surchargé. Réessayez dans un instant.", errNotGranted: "Accès à Claude refusé pour cette page. Autorisez-le pour continuer.",
+    errRateLimited: "Limite d'utilisation atteinte. Réessayez plus tard.", errSession: "Session Claude expirée : reconnectez-vous.",
+    errGeneric: "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.",
+    // spoken messages (native language)
+    sayNetLost: "Réseau perdu, je réessaie.", sayNoNet: "Pas de réseau. Je me mets en pause.", sayIdle: "Je me mets en pause.",
+    sayRetry: "Connexion difficile, je réessaie.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
+  },
+  en: {
+    ready: "Ready", listening: "Listening…", thinking: "Claude is thinking…", speaking: "Claude is speaking…",
+    yourTurnWord: "Your turn… (\"{w}\")", notesBtn: "Notebook", settings: "Settings", close: "Close",
+    startHint: "Tap the mic to start the conversation.", handsFree: "Hands-free", pause: "Pause",
+    talk: "Talk", finishSend: "Finish and send", interrupt: "Interrupt and talk",
+    typedPh: "…or type / dictate with your keyboard", typedPhEnd: "…or dictate with your keyboard, end with \"{w}\"",
+    yourMessage: "Your message", send: "Send",
+    notesTitle: "Corrections notebook", notesEmpty: "Your corrected mistakes will appear here so you can review them later.",
+    copyAll: "Copy all", copied: "Copied", copyFailed: "Couldn't copy", clearNotes: "Clear notebook",
+    clearAsk: "Clear the notebook?", clearYes: "Yes, clear it", cancel: "Cancel",
+    uiLang: "Interface language",
+    modeClaude: "<b>Claude.ai mode</b>: replies use your Claude account, no key needed. The page can't use the microphone here: dictate with your keyboard's mic in the text field and finish with your end word. For hands-free voice conversation, open the standalone version in Chrome.",
+    modeKey: "<b>API key mode</b>: calls go straight from this browser to the Anthropic API.",
+    modeNoKey: "<b>API key needed</b>: paste your Anthropic key below to start.",
+    apiKey: "Anthropic API key", apiKeyHelp: "Stored only in this browser. Create one at console.anthropic.com.",
+    model: "Model", modelOpus: "Claude Opus 5.5 — best corrections", modelSonnet: "Claude Sonnet 5.5 — balanced", modelHaiku: "Claude Haiku 5.5 — fastest",
+    lang: "Language you practise", nativeLang: "Your native language", nativeHelp: "Language of Fluent's explanations and spoken messages.",
+    level: "Your level", A2: "A2 — elementary", B1: "B1 — intermediate", B2: "B2 — upper intermediate", C1: "C1 — advanced",
+    topic: "Conversation topic", topicPh: "anything, travel, job interview, work…", voice: "Voice",
+    rate: "Voice speed:", endWord: "End word",
+    endWordHelp: "Say this word at the end of your sentence for Claude to answer. Fluent keeps listening until then, even if you pause. Pick a short, distinct word in the language you practise; each language suggests one. Leave it empty to send after a silence.",
+    patience: "Silence before sending:", patienceHelp: "Only used without an end word.",
+    carMode: "Car mode", carModeLabel: "Large display, short replies, longer listening",
+    carModeHelp: "The screen stays on during the conversation. Voice commands: ask Claude to repeat, speak more slowly or faster, change the subject or pause.",
+    corrections: "Corrections", nativeExplain: "Explanations in my native language (otherwise in the language I practise)", speakFix: "Read the correction aloud",
+    newChat: "New conversation", example: "Example", correction: "Correction", understood: "Understood: ", replay: "Replay",
+    listenEnd: "Speak, take your time. Say \"{w}\" to finish.", listenSilence: "Speak. I'll send after a short silence, or tap the mic.",
+    heardNothing: "I didn't hear anything. Tap the mic to talk.", interruptHint: "Tap the mic to interrupt.",
+    pausedHint: "Paused. Tap the mic to resume.", idlePaused: "Listening paused: no speech. Tap the mic to resume.",
+    retryHint: "Tap the mic to try again.", answerBelow: "Answer in the field below.", yourTurn: "Your turn! Tap the mic to answer.",
+    newChatHint: "New conversation. Tap the mic to start.",
+    netLostHint: "Network lost, retrying…", connHint: "Poor connection, retrying…",
+    noNetNotice: "No network for speech recognition. Tap the mic when the connection is back.",
+    noSRHint: "Tap the mic to start (or type below: speech recognition needs Chrome or Edge).",
+    noSRNotice: "Speech recognition isn't available in this browser. Use Chrome or Edge, or your keyboard's dictation in the field below.",
+    micBlockedNotice: "The microphone is blocked here. Use your keyboard's dictation (the mic key on your phone keyboard) in the field below, or open the standalone version of Fluent in Chrome.",
+    errNoKey: "Add your Anthropic API key in Settings.", errRefusal: "Claude declined to answer this message. Try rephrasing it.",
+    errEmpty: "Empty reply. Try again.", errUnreadable: "Unreadable reply. Send your message again.",
+    err401: "API key rejected. Check it in Settings.", err429: "Too many requests or out of credit. Wait a moment.",
+    err5xx: "Claude is overloaded. Try again in a moment.", errNotGranted: "This page isn't allowed to use Claude. Allow it to continue.",
+    errRateLimited: "Usage limit reached. Try again later.", errSession: "Your Claude session expired: sign in again.",
+    errGeneric: "Couldn't reach Claude. Check your connection and try again.",
+    sayNetLost: "Network lost, retrying.", sayNoNet: "No network. Pausing.", sayIdle: "Pausing.",
+    sayRetry: "Poor connection, retrying.", sayFail: "I couldn't reach Claude. Please say that again.",
+  },
+};
+// Native languages: name used in the tutor prompt, voice for spoken messages.
+const NATIVES = {
+  fr: { label: { fr: "Français", en: "French" }, name: "French", voice: "fr-FR" },
+  en: { label: { fr: "Anglais", en: "English" }, name: "English", voice: "en-US" },
+};
+const fill = (str, v) => str.replace(/\{(\w+)\}/g, (_, k) => v?.[k] ?? "");
+const t = (k, v) => fill(I18N[settings.ui]?.[k] ?? I18N.fr[k] ?? k, v);   // on screen
+const tn = (k, v) => fill(I18N[settings.native]?.[k] ?? I18N.en[k] ?? k, v);  // spoken, in the native language
+
 // ---------- languages ----------
 // name: how the tutor prompt names the language; end: default end word; tip: spoken before a correction.
 const LANGS = {
-  "en-US": { label: "Anglais (américain)", name: "American English", end: "over", tip: "Quick tip: you can say",
-    example: ["Hi! What did you do last weekend?", "I have went to the cinema with my sister.", "I have went", "I went", "Pour une action terminée à un moment précis, on utilise le prétérit.", "Nice! What movie did you see, and would you recommend it?"] },
-  "en-GB": { label: "Anglais (britannique)", name: "British English", end: "over", tip: "Quick tip: you can say",
-    example: ["Hi! What did you get up to at the weekend?", "I have went to the cinema with my sister.", "I have went", "I went", "Pour une action terminée à un moment précis, on utilise le prétérit.", "Lovely! What film did you see?"] },
-  "es-ES": { label: "Espagnol (Espagne)", name: "Spanish as spoken in Spain", end: "cambio", tip: "Un consejo: puedes decir",
-    example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", "« Película » est féminin : l'adjectif s'accorde.", "¡Vaya! ¿Qué película era?"] },
-  "es-MX": { label: "Espagnol (Mexique)", name: "Mexican Spanish", end: "cambio", tip: "Un consejo: puedes decir",
-    example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", "« Película » est féminin : l'adjectif s'accorde.", "¡Qué mala onda! ¿Qué película era?"] },
-  "de-DE": { label: "Allemand", name: "German", end: "fertig", tip: "Kleiner Tipp: Du kannst sagen",
-    example: ["Hallo! Was hast du am Wochenende gemacht?", "Ich habe ins Kino gegangen mit meiner Schwester.", "Ich habe ins Kino gegangen", "Ich bin ins Kino gegangen", "« Gehen » forme son parfait avec « sein ».", "Schön! Welchen Film habt ihr gesehen?"] },
-  "it-IT": { label: "Italien", name: "Italian", end: "passo", tip: "Un consiglio: puoi dire",
-    example: ["Ciao! Cosa hai fatto nel fine settimana?", "Ho andato al cinema con mia sorella.", "Ho andato", "Sono andato", "« Andare » se conjugue avec « essere » au passé composé.", "Bello! Che film avete visto?"] },
-  "pt-BR": { label: "Portugais (Brésil)", name: "Brazilian Portuguese", end: "câmbio", tip: "Uma dica: você pode dizer",
-    example: ["Oi! O que você fez no fim de semana?", "Eu tenho ido ao cinema com minha irmã no sábado.", "Eu tenho ido", "Eu fui", "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", "Que legal! Que filme vocês viram?"] },
-  "pt-PT": { label: "Portugais (Portugal)", name: "European Portuguese", end: "câmbio", tip: "Uma dica: pode dizer",
-    example: ["Olá! O que fizeste no fim de semana?", "Eu tenho ido ao cinema com a minha irmã no sábado.", "Eu tenho ido", "Eu fui", "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", "Que giro! Que filme viram?"] },
-  "nl-NL": { label: "Néerlandais", name: "Dutch", end: "over", tip: "Een tip: je kunt zeggen",
-    example: ["Hoi! Wat heb je in het weekend gedaan?", "Ik heb naar de bioscoop gegaan met mijn zus.", "Ik heb naar de bioscoop gegaan", "Ik ben naar de bioscoop gegaan", "« Gaan » forme son parfait avec « zijn ».", "Leuk! Welke film hebben jullie gezien?"] },
+  "en-US": { label: { fr: "Anglais (américain)", en: "English (American)" }, name: "American English", end: "over", tip: "Quick tip: you can say",
+    example: ["Hi! What did you do last weekend?", "I have went to the cinema with my sister.", "I have went", "I went", { fr: "Pour une action terminée à un moment précis, on utilise le prétérit.", en: "For a finished action at a specific time, use the simple past." }, "Nice! What movie did you see, and would you recommend it?"] },
+  "en-GB": { label: { fr: "Anglais (britannique)", en: "English (British)" }, name: "British English", end: "over", tip: "Quick tip: you can say",
+    example: ["Hi! What did you get up to at the weekend?", "I have went to the cinema with my sister.", "I have went", "I went", { fr: "Pour une action terminée à un moment précis, on utilise le prétérit.", en: "For a finished action at a specific time, use the simple past." }, "Lovely! What film did you see?"] },
+  "es-ES": { label: { fr: "Espagnol (Espagne)", en: "Spanish (Spain)" }, name: "Spanish as spoken in Spain", end: "cambio", tip: "Un consejo: puedes decir",
+    example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", { fr: "« Película » est féminin : l'adjectif s'accorde.", en: "\"Película\" is feminine, so the adjective agrees." }, "¡Vaya! ¿Qué película era?"] },
+  "es-MX": { label: { fr: "Espagnol (Mexique)", en: "Spanish (Mexico)" }, name: "Mexican Spanish", end: "cambio", tip: "Un consejo: puedes decir",
+    example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", { fr: "« Película » est féminin : l'adjectif s'accorde.", en: "\"Película\" is feminine, so the adjective agrees." }, "¡Qué mala onda! ¿Qué película era?"] },
+  "de-DE": { label: { fr: "Allemand", en: "German" }, name: "German", end: "fertig", tip: "Kleiner Tipp: Du kannst sagen",
+    example: ["Hallo! Was hast du am Wochenende gemacht?", "Ich habe ins Kino gegangen mit meiner Schwester.", "Ich habe ins Kino gegangen", "Ich bin ins Kino gegangen", { fr: "« Gehen » forme son parfait avec « sein ».", en: "\"Gehen\" forms its perfect tense with \"sein\"." }, "Schön! Welchen Film habt ihr gesehen?"] },
+  "it-IT": { label: { fr: "Italien", en: "Italian" }, name: "Italian", end: "passo", tip: "Un consiglio: puoi dire",
+    example: ["Ciao! Cosa hai fatto nel fine settimana?", "Ho andato al cinema con mia sorella.", "Ho andato", "Sono andato", { fr: "« Andare » se conjugue avec « essere » au passé composé.", en: "\"Andare\" takes \"essere\" in the passato prossimo." }, "Bello! Che film avete visto?"] },
+  "pt-BR": { label: { fr: "Portugais (Brésil)", en: "Portuguese (Brazil)" }, name: "Brazilian Portuguese", end: "câmbio", tip: "Uma dica: você pode dizer",
+    example: ["Oi! O que você fez no fim de semana?", "Eu tenho ido ao cinema com minha irmã no sábado.", "Eu tenho ido", "Eu fui", { fr: "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", en: "For a one-off past action, use the pretérito perfeito." }, "Que legal! Que filme vocês viram?"] },
+  "pt-PT": { label: { fr: "Portugais (Portugal)", en: "Portuguese (Portugal)" }, name: "European Portuguese", end: "câmbio", tip: "Uma dica: pode dizer",
+    example: ["Olá! O que fizeste no fim de semana?", "Eu tenho ido ao cinema com a minha irmã no sábado.", "Eu tenho ido", "Eu fui", { fr: "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", en: "For a one-off past action, use the pretérito perfeito." }, "Que giro! Que filme viram?"] },
+  "nl-NL": { label: { fr: "Néerlandais", en: "Dutch" }, name: "Dutch", end: "over", tip: "Een tip: je kunt zeggen",
+    example: ["Hoi! Wat heb je in het weekend gedaan?", "Ik heb naar de bioscoop gegaan met mijn zus.", "Ik heb naar de bioscoop gegaan", "Ik ben naar de bioscoop gegaan", { fr: "« Gaan » forme son parfait avec « zijn ».", en: "\"Gaan\" forms its perfect tense with \"zijn\"." }, "Leuk! Welke film hebben jullie gezien?"] },
 };
-for (const [code, l] of Object.entries(LANGS)) $("lang").add(new Option(l.label, code));
 const L = () => LANGS[settings.lang] || LANGS["en-US"];
 
 // ---------- settings ----------
 const stored = store.get("settings", {});
+const browserFr = /^fr\b/i.test(navigator.language || "");
 const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
-  rate: 0.95, patience: 1.8, endWord: null, frExplain: true, speakFix: true, handsFree: true, carMode: false,
+  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, speakFix: true, handsFree: true, carMode: false,
+  ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
 }, stored);
-delete settings.accent;
+delete settings.accent; delete settings.frExplain;
+if (!I18N[settings.ui]) settings.ui = "en";
+if (!NATIVES[settings.native]) settings.native = "fr";
 if (!LANGS[settings.lang]) settings.lang = "en-US";
 if (settings.endWord === null) settings.endWord = L().end;
 const saveSettings = () => store.set("settings", settings);
+
+function fillLanguageLists() {
+  const fillSel = (id, entries, value) => {
+    const sel = $(id); sel.innerHTML = "";
+    for (const [code, l] of entries) sel.add(new Option(l.label[settings.ui], code));
+    sel.value = value;
+  };
+  fillSel("lang", Object.entries(LANGS), settings.lang);
+  fillSel("native", Object.entries(NATIVES), settings.native);
+}
+fillLanguageLists();
 
 function bindSetting(id, key, kind = "value") {
   const el = $(id);
@@ -262,8 +388,8 @@ function bindSetting(id, key, kind = "value") {
     saveSettings(); onSettingChange(key);
   });
 }
-[["apiKey","apiKey"],["model","model"],["lang","lang"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
-[["frExplain","frExplain"],["speakFix","speakFix"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
+[["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
+[["nativeExplain","nativeExplain"],["speakFix","speakFix"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
 $("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
 $("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
 $("rateVal").textContent = settings.rate; $("patienceVal").textContent = settings.patience;
@@ -277,14 +403,14 @@ function onSettingChange(key) {
     if (!turns.length) renderExample();
   }
   if (key === "carMode") renderCar();
+  if (key === "ui") applyI18n();
+  if ((key === "native" || key === "nativeExplain") && !turns.length) renderExample();
   if (key === "apiKey") renderMode();
   if (key === "endWord") renderEndWord();
 }
 function renderEndWord() {
   $("patienceField").hidden = !!settings.endWord;
-  $("typedInput").placeholder = settings.endWord
-    ? `…ou dictez au clavier, finissez par « ${settings.endWord} »`
-    : "…ou écrivez / dictez au clavier";
+  $("typedInput").placeholder = settings.endWord ? t("typedPhEnd", { w: settings.endWord }) : t("typedPh");
 }
 
 // ---------- backend: Claude in the artifact viewer, else the user's API key ----------
@@ -298,12 +424,10 @@ const ready = (async () => {
 function renderMode() {
   const box = $("modeBox");
   if (sample) {
-    box.innerHTML = "<b>Mode Claude.ai</b> : les réponses utilisent votre compte Claude, sans clé. Le micro de la page n'est pas accessible ici : dictez avec le micro de votre clavier dans le champ texte, en finissant par votre mot de fin. Pour la conversation vocale mains libres, ouvrez la version autonome dans Chrome.";
+    box.innerHTML = t("modeClaude");
     $("keyField").hidden = true; $("modelField").hidden = true;
   } else {
-    box.innerHTML = settings.apiKey
-      ? "<b>Mode clé API</b> — les appels partent directement de ce navigateur vers l'API Anthropic."
-      : "<b>Clé API requise</b> — collez votre clé Anthropic ci-dessous pour commencer.";
+    box.innerHTML = settings.apiKey ? t("modeKey") : t("modeNoKey");
     $("keyField").hidden = false; $("modelField").hidden = false;
   }
 }
@@ -328,14 +452,15 @@ function rules() {
   const length = settings.carMode
     ? "1 or 2 short sentences, easy to follow by ear: the learner is driving and only listens"
     : "1 to 3 short sentences";
-  return `You are Fluent, a conversation partner in ${lang} for a French-speaking adult learner at CEFR level ${settings.level}. Always speak ${lang}.
+  const native = NATIVES[settings.native].name;
+  return `You are Fluent, a conversation partner in ${lang} for a ${native}-speaking adult learner at CEFR level ${settings.level}. Always speak ${lang}.
 Topic: ${topic}.
 
 Be a real conversation partner, not an interviewer: react to what they actually said, pick up on details, share brief opinions, experiences or surprising facts of your own, disagree sometimes, and vary your questions. Keep the exchange interesting and natural, the way a curious friend would talk.
 
-How the learner's messages reach you: they speak ${lang} with a marked French accent and the text comes from automatic speech recognition, which often mishears accented speech (sounds French speakers typically confuse, wrong word boundaries, French words slipping in). When available, other recognizer hypotheses are listed after the transcript. Work out what they most plausibly meant from context, the hypotheses and typical French-accent confusions. They do not want pronunciation feedback: never treat recognition errors or accent as mistakes and never mention pronunciation. If you truly cannot tell what they meant, say so naturally in your reply and ask them to say it another way.${end}
+How the learner's messages reach you: they speak ${lang} with a marked ${native} accent and the text comes from automatic speech recognition, which often mishears accented speech (sounds ${native} speakers typically confuse, wrong word boundaries, ${native} words slipping in). When available, other recognizer hypotheses are listed after the transcript. Work out what they most plausibly meant from context, the hypotheses and typical ${native}-accent confusions. They do not want pronunciation feedback: never treat recognition errors or accent as mistakes and never mention pronunciation. If you truly cannot tell what they meant, say so naturally in your reply and ask them to say it another way.${end}
 
-Voice commands: if the learner asks you, in ${lang} or in French, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic", with has_mistake false. For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", propose a new subject with a question. Otherwise "action" is "none".
+Voice commands: if the learner asks you, in ${lang} or in ${native}, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic", with has_mistake false. For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", propose a new subject with a question. Otherwise "action" is "none".
 
 For each learner message, return JSON with:
 - action: as above.
@@ -343,7 +468,7 @@ For each learner message, return JSON with:
 - has_mistake: true only if "understood" contains a real grammar, vocabulary or phrasing error that a teacher would correct at this level.
 - original: the wrong fragment from "understood" (a few words), else "".
 - corrected: the natural corrected version of that fragment, else "".
-- explanation: one short sentence explaining the rule, in ${settings.frExplain ? "French" : `simple ${lang}`}; else "".
+- explanation: one short sentence explaining the rule, in ${settings.nativeExplain ? native : `simple ${lang}`}; else "".
 - reply: ${length} of natural spoken ${lang} at the learner's level, ending with something that invites them to keep talking (usually one question). Do not repeat the correction in reply. No markdown, lists or emoji: it is read aloud.
 Correct only the single most useful mistake per message.`;
 }
@@ -387,7 +512,7 @@ function errorText(e) {
   switch (e?.code) {
     case "not_granted": return "Accès à Claude refusé pour cette page. Autorisez-le pour continuer.";
     case "rate_limited": return "Limite d'utilisation atteinte. Réessayez plus tard.";
-    case "invalid_json": return "Réponse illisible. Renvoyez votre message.";
+    case "invalid_json": return t("errUnreadable");
     case "session_expired": return "Session Claude expirée : reconnectez-vous.";
   }
   return "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.";
@@ -430,7 +555,7 @@ function speak(text, lang) {
   });
 }
 // Spoken status messages, in French, so nothing needs to be read on screen while driving.
-const say = (text) => speak(text, "fr-FR");
+const say = (key) => speak(tn(key), NATIVES[settings.native].voice);
 
 // ---------- keep the screen on during a conversation ----------
 let active = false, wakeLock = null;
@@ -455,10 +580,10 @@ function setState(s, hint) {
   state = s;
   $("mic").dataset.state = s;
   $("mic").disabled = s === "thinking";
-  $("mic").setAttribute("aria-label", s === "listening" ? "Terminer et envoyer" : s === "speaking" ? "Interrompre et parler" : "Parler");
-  const label = { idle: "Prêt", listening: "Je vous écoute…", thinking: "Claude réfléchit…", speaking: "Claude parle…" }[s];
+  $("mic").setAttribute("aria-label", t(s === "listening" ? "finishSend" : s === "speaking" ? "interrupt" : "talk"));
+  const label = t({ idle: "ready", listening: "listening", thinking: "thinking", speaking: "speaking" }[s]);
   $("status").textContent = label;
-  $("bigState").textContent = s === "listening" && settings.endWord ? `À vous… (« ${settings.endWord} »)` : label;
+  $("bigState").textContent = s === "listening" && settings.endWord ? t("yourTurnWord", { w: settings.endWord }) : label;
   $("bigState").dataset.state = s;
   if (hint !== undefined) $("hint").textContent = hint;
 }
@@ -473,8 +598,8 @@ function dropLastWords(text, n) { return text.trim().split(/\s+/).slice(0, -n ||
 
 function listeningHint() {
   return settings.endWord
-    ? `Parlez, prenez votre temps. Dites « ${settings.endWord} » pour terminer.`
-    : "Parlez. J'envoie après un court silence, ou touchez le micro.";
+    ? t("listenEnd", { w: settings.endWord })
+    : t("listenSilence");
 }
 
 function listen() {
@@ -529,8 +654,8 @@ function startRun(s) {
       // Brief network loss (tunnel, dead zone): keep retrying with a growing delay.
       s.netErrors = (s.netErrors || 0) + 1;
       s.emptyRuns = (s.emptyRuns || 0) + 2;
-      if (s.netErrors === 1) { $("hint").textContent = "Réseau perdu, je réessaie…"; say("Réseau perdu, je réessaie.") }
-      if (s.netErrors > 12) { s.cancelled = true; session = null; clearInterim(); setActive(false); addNotice("Pas de réseau pour la reconnaissance vocale. Touchez le micro quand la connexion revient."); setState("idle", ""); say("Pas de réseau. Je me mets en pause.") }
+      if (s.netErrors === 1) { $("hint").textContent = t("netLostHint"); say("sayNetLost") }
+      if (s.netErrors > 12) { s.cancelled = true; session = null; clearInterim(); setActive(false); addNotice(t("noNetNotice")); setState("idle", ""); say("sayNoNet") }
     }
   };
   r.onend = () => {
@@ -539,7 +664,7 @@ function startRun(s) {
     commitRun(s);
     if (s.cancelled || session !== s) return;
     if (s.finishing) return complete(s);
-    if (Date.now() - s.lastSpeech > idleLimit()) { session = null; clearInterim(); setActive(false); setState("idle", "Écoute en pause faute de parole. Touchez le micro pour reprendre."); say("Je me mets en pause."); return }
+    if (Date.now() - s.lastSpeech > idleLimit()) { session = null; clearInterim(); setActive(false); setState("idle", t("idlePaused")); say("sayIdle"); return }
     const delay = Math.min(3000, 120 * 2 ** Math.max(0, (s.emptyRuns || 0) - 2));  // back off when nothing is heard
     setTimeout(() => { if (session === s && !s.cancelled && !s.finishing) startRun(s) }, delay);
   };
@@ -577,7 +702,7 @@ function complete(s) {
     else if (s.alts.at(-1)?.some(endsWithEndWord)) text = dropLastWords(text, 1);
   }
   if (text) send(text, alts);
-  else setState("idle", "Je n'ai rien entendu. Touchez le micro pour parler.");
+  else setState("idle", t("heardNothing"));
 }
 function stopListening(discard) {
   const s = session;
@@ -590,8 +715,8 @@ function micFallback() {
   session = null; clearInterim();
   setState("idle", "");
   const msg = !SR
-    ? "La reconnaissance vocale n'est pas disponible dans ce navigateur. Utilisez Chrome ou Edge, ou la dictée de votre clavier dans le champ ci-dessous."
-    : "Le micro est bloqué ici. Utilisez la dictée de votre clavier (touche micro du clavier du téléphone) dans le champ ci-dessous, ou ouvrez la version autonome de Fluent dans Chrome.";
+    ? t("noSRNotice")
+    : t("micBlockedNotice");
   if (!document.querySelector(".notice")) addNotice(msg);
   $("typedInput").focus();
 }
@@ -615,23 +740,23 @@ function showInterim(text) {
 }
 function clearInterim() { interimEl?.remove(); interimEl = null }
 
-function addMe(text) { const t = el("div", "turn me"); t.append(el("div", "bubble", text)); $("log").append(t); scrollDown(); return t }
+function addMe(text) { const turn = el("div", "turn me"); turn.append(el("div", "bubble", text)); $("log").append(turn); scrollDown(); return turn }
 function addUnderstood(meEl, understood, said) {
   if (!meEl || !understood || norm(understood) === norm(said)) return;
-  meEl.append(el("div", "understood", "Compris : " + understood));
+  meEl.append(el("div", "understood", t("understood") + understood));
 }
 function addTutor(data) {
-  const t = el("div", "turn tutor");
-  if (data.has_mistake && data.corrected) t.append(fixEl(data, "div", "fix"));
-  t.append(el("div", "bubble", data.reply));
-  const again = el("button", "replay", "Réécouter"); again.type = "button";
+  const turn = el("div", "turn tutor");
+  if (data.has_mistake && data.corrected) turn.append(fixEl(data, "div", "fix"));
+  turn.append(el("div", "bubble", data.reply));
+  const again = el("button", "replay", t("replay")); again.type = "button";
   again.onclick = () => speak(data.reply);
-  t.append(again);
-  $("log").append(t); scrollDown();
+  turn.append(again);
+  $("log").append(turn); scrollDown();
 }
 function fixEl(d, tag, cls) {
   const f = el(tag, cls);
-  if (cls === "fix") f.append(el("span", "label", "Correction"));
+  if (cls === "fix") f.append(el("span", "label", t("correction")));
   if (d.original) { f.append(el("s", null, d.original), " → ") }
   f.append(el("mark", null, d.corrected));
   if (d.explanation) f.append(el("span", "why", d.explanation));
@@ -662,20 +787,20 @@ async function send(text, alts) {
   for (let attempt = 0; ; attempt++) {
     try {
       data = await askTutor();
-      if (!data || typeof data.reply !== "string") throw { userMessage: "Réponse illisible. Renvoyez votre message." };
+      if (!data || typeof data.reply !== "string") throw { userMessage: t("errUnreadable") };
       break;
     } catch (e) {
       if (attempt < 3 && retryable(e)) {
-        if (attempt === 0) { $("hint").textContent = "Connexion difficile, je réessaie…"; say("Connexion difficile, je réessaie.") }
+        if (attempt === 0) { $("hint").textContent = t("connHint"); say("sayRetry") }
         await sleep(2000 * 2 ** attempt);
         continue;
       }
       turns.pop();
       meEl?.classList.add("failed");
       addNotice(errorText(e));
-      if (opening) { turns = []; setActive(false); setState("idle", "Touchez le micro pour réessayer."); return }
-      await say("Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.");
-      if (settings.handsFree && !micBlocked) listen(); else setState("idle", "Touchez le micro pour réessayer.");
+      if (opening) { turns = []; setActive(false); setState("idle", t("retryHint")); return }
+      await say("sayFail");
+      if (settings.handsFree && !micBlocked) listen(); else setState("idle", t("retryHint"));
       return;
     }
   }
@@ -683,7 +808,7 @@ async function send(text, alts) {
   if (action === "repeat") {
     turns.pop();  // the command itself is not part of the conversation
     meEl?.remove();
-    setState("speaking", "Touchez le micro pour couper la parole.");
+    setState("speaking", t("interruptHint"));
     await speak(lastReply);
     return afterSpeaking();
   }
@@ -695,18 +820,18 @@ async function send(text, alts) {
   if (action === "none") addUnderstood(meEl, data.understood, text);
   if (data.reply) { addTutor(data); lastReply = data.reply }
   if (action === "none" && data.has_mistake && data.corrected) saveNote(data);
-  setState("speaking", "Touchez le micro pour couper la parole.");
+  setState("speaking", t("interruptHint"));
   if (action === "none" && settings.speakFix && data.has_mistake && data.corrected) await speak(`${L().tip}: ${data.corrected}.`);
   if (state !== "speaking") return;
   await speak(data.reply);
-  if (action === "pause") { setActive(false); setState("idle", "En pause. Touchez le micro pour reprendre."); return }
+  if (action === "pause") { setActive(false); setState("idle", t("pausedHint")); return }
   afterSpeaking();
 }
 
 function afterSpeaking() {
   if (state !== "speaking") return;
   if (settings.handsFree && !micBlocked) listen();
-  else setState("idle", micBlocked ? "Répondez dans le champ ci-dessous." : "À vous ! Touchez le micro pour répondre.");
+  else setState("idle", micBlocked ? t("answerBelow") : t("yourTurn"));
 }
 
 function start() {
@@ -726,7 +851,7 @@ $("mic").addEventListener("click", () => {
 });
 $("stopAll").addEventListener("click", () => {
   synth?.cancel(); stopListening(true); setActive(false);
-  if (state !== "thinking") setState("idle", "En pause. Appuyez sur le micro pour reprendre.");
+  if (state !== "thinking") setState("idle", t("pausedHint"));
 });
 // Keyboard dictation (e.g. Gboard's mic): saying the end word sends the message.
 $("typedInput").addEventListener("input", () => {
@@ -747,7 +872,7 @@ $("typed").addEventListener("submit", (e) => {
 $("newChat").addEventListener("click", () => {
   synth?.cancel(); stopListening(true); setActive(false); turns = []; lastReply = "";
   $("log").innerHTML = ""; started = true; closeSheets();
-  setState("idle", "Nouvelle conversation. Appuyez sur le micro pour commencer.");
+  setState("idle", t("newChatHint"));
 });
 
 // ---------- notebook ----------
@@ -761,7 +886,7 @@ function renderNotes() {
   const ul = $("notes"); ul.innerHTML = "";
   for (const n of notes) {
     const li = fixEl(n, "li", "");
-    li.prepend(el("time", null, new Date(n.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })));
+    li.prepend(el("time", null, new Date(n.at).toLocaleDateString(settings.ui === "fr" ? "fr-FR" : "en-GB", { day: "numeric", month: "short" })));
     ul.append(li);
   }
   $("notesEmpty").hidden = notes.length > 0;
@@ -769,9 +894,9 @@ function renderNotes() {
 renderNotes();
 $("copyNotes").addEventListener("click", async () => {
   const txt = notes.map((n) => `${n.original ? n.original + " → " : ""}${n.corrected}${n.explanation ? " (" + n.explanation + ")" : ""}`).join("\n");
-  try { await navigator.clipboard.writeText(txt); $("copyNotes").textContent = "Copié" }
-  catch { $("copyNotes").textContent = "Copie impossible" }
-  setTimeout(() => $("copyNotes").textContent = "Copier tout", 1600);
+  try { await navigator.clipboard.writeText(txt); $("copyNotes").textContent = t("copied") }
+  catch { $("copyNotes").textContent = t("copyFailed") }
+  setTimeout(() => $("copyNotes").textContent = t("copyAll"), 1600);
 });
 $("clearNotes").addEventListener("click", () => $("clearConfirm").hidden = false);
 $("clearNo").addEventListener("click", () => $("clearConfirm").hidden = true);
@@ -788,18 +913,31 @@ document.querySelectorAll(".sheet").forEach((s) => {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheets() });
 
 function renderExample() {
-  const [q, said, orig, corr, why, reply] = L().example;
+  const [q, said, orig, corr, whyByLang, reply] = L().example;
+  const why = settings.nativeExplain ? whyByLang[settings.native] : "";
   const log = $("log");
   log.innerHTML = "";
-  log.append(el("span", "example-tag", "Exemple"));
+  log.append(el("span", "example-tag", t("example")));
   const t1 = el("div", "turn tutor"); t1.append(el("div", "bubble", q));
   const t2 = el("div", "turn me"); t2.append(el("div", "bubble", said));
   const t3 = el("div", "turn tutor"); t3.append(fixEl({ original: orig, corrected: corr, explanation: why }, "div", "fix"), el("div", "bubble", reply));
   log.append(t1, t2, t3);
 }
 function renderCar() { document.body.classList.toggle("car", !!settings.carMode) }
-renderExample();
+// Puts every on-screen text in the interface language.
+function applyI18n() {
+  document.documentElement.lang = settings.ui;
+  document.querySelectorAll("[data-i]").forEach((e) => { e.textContent = t(e.dataset.i) });
+  document.querySelectorAll("[data-i-ph]").forEach((e) => { e.placeholder = t(e.dataset.iPh) });
+  document.querySelectorAll("[data-i-aria]").forEach((e) => { e.setAttribute("aria-label", t(e.dataset.iAria)) });
+  fillLanguageLists();
+  renderMode();
+  renderEndWord();
+  renderNotes();
+  if (!turns.length) renderExample();
+  setState(state);
+}
 renderCar();
-renderEndWord();
-if (!SR) $("hint").textContent = "Appuyez sur le micro pour commencer (ou écrivez ci-dessous : la reconnaissance vocale demande Chrome ou Edge).";
+applyI18n();
+$("hint").textContent = SR ? t("startHint") : t("noSRHint");
 </script>
