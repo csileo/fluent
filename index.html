@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Fluent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Layout: one-screen app — header, scrolling transcript, fixed talk bar; notebook and settings slide in as sheets. */
+:root {
+  --paper: #f1f5f4; --surface: #ffffff; --ink: #0e2a2f; --muted: #587074; --line: #d3dfdd;
+  --accent: #0f6e6a; --accent-ink: #f2fbfa; --mark: #ffe45c; --mark-ink: #2f2700;
+  --me: #0f6e6a; --me-ink: #f2fbfa; --danger: #b3261e; --listen: #c2410c;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0a181b; --surface: #112529; --ink: #e2eeed; --muted: #8ea5a7; --line: #1f3a3e;
+  --accent: #4fc3b8; --accent-ink: #062321; --mark: #e6cc38; --mark-ink: #221c00;
+  --me: #1b4e4a; --me-ink: #e8f7f5; --danger: #f2877f; --listen: #fb923c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0a181b; --surface: #112529; --ink: #e2eeed; --muted: #8ea5a7; --line: #1f3a3e;
+  --accent: #4fc3b8; --accent-ink: #062321; --mark: #e6cc38; --mark-ink: #221c00;
+  --me: #1b4e4a; --me-ink: #e8f7f5; --danger: #f2877f; --listen: #fb923c; color-scheme: dark }
+
+*, *::before, *::after { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { height: 100% }
+body { background: var(--paper); color: var(--ink); font: 16px/1.5 var(--font-body); margin: 0 }
+button, input, select { font: inherit; color: inherit }
+button { cursor: pointer }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+
+.app { height: 100%; display: flex; flex-direction: column; max-width: 760px; margin: 0 auto; padding-inline: 16px }
+header { display: flex; align-items: center; gap: 12px; padding-block: 14px 10px; border-bottom: 1px solid var(--line) }
+.brand { font: 800 1.6rem/1 var(--font-display); letter-spacing: -0.02em; margin: 0 }
+.brand span { background: linear-gradient(transparent 58%, var(--mark) 58% 90%, transparent 90%); padding-inline: 2px }
+.status { font-size: .8rem; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: .9rem; display: inline-flex; gap: 6px; align-items: center }
+.icon-btn .count { background: var(--mark); color: var(--mark-ink); border-radius: 999px; padding: 0 7px; font-weight: 700; font-size: .78rem; font-variant-numeric: tabular-nums }
+
+#log { flex: 1; overflow-y: auto; padding-block: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0 }
+.turn { max-width: 88%; display: flex; flex-direction: column; gap: 6px; min-width: 0 }
+.turn.tutor { align-self: flex-start }
+.turn.me { align-self: flex-end; align-items: flex-end }
+.bubble { padding: 10px 14px; border-radius: var(--radius); overflow-wrap: anywhere }
+.tutor .bubble { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px }
+.me .bubble { background: var(--me); color: var(--me-ink); border-bottom-right-radius: 4px }
+.me .bubble.interim { opacity: .65; font-style: italic }
+.me.failed .bubble { opacity: .55 }
+.understood { font-size: .82rem; color: var(--muted); max-width: 100%; text-align: right }
+.fix { font-size: .92rem; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface) }
+.fix .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: block; margin-bottom: 2px }
+.fix s { color: var(--muted) }
+.fix mark { background: var(--mark); color: var(--mark-ink); padding: 0 3px; border-radius: 3px }
+.fix .why { display: block; color: var(--muted); margin-top: 4px }
+.replay { align-self: flex-start; border: 0; background: none; color: var(--muted); font-size: .8rem; padding: 0 2px; text-decoration: underline; text-underline-offset: 3px }
+.example-tag { align-self: center; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px }
+.notice { align-self: stretch; font-size: .9rem; border-left: 3px solid var(--danger); background: var(--surface); padding: 8px 12px; border-radius: 6px }
+
+.talkbar { border-top: 1px solid var(--line); padding-block: 12px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 10px }
+.talk-row { display: flex; align-items: center; justify-content: center; gap: 14px }
+#mic { width: 76px; height: 76px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; position: relative; transition: transform .15s }
+#mic:disabled { opacity: .5; cursor: progress }
+#mic svg { width: 32px; height: 32px }
+#mic[data-state="listening"] { background: var(--listen) }
+#mic[data-state="listening"]::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid var(--listen); animation: pulse 1.4s ease-out infinite }
+@keyframes pulse { from { transform: scale(.92); opacity: .9 } to { transform: scale(1.18); opacity: 0 } }
+.side { width: 96px; font-size: .82rem; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center }
+.switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer }
+.hint { text-align: center; font-size: .85rem; color: var(--muted); min-height: 1.3em; margin: 0 }
+form.typed { display: flex; gap: 8px }
+form.typed input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 12px }
+form.typed button { border: 0; background: var(--ink); color: var(--paper); border-radius: 10px; padding: 9px 14px; font-weight: 700 }
+
+.sheet { position: fixed; inset: 0; background: color-mix(in srgb, var(--ink) 35%, transparent); display: flex; justify-content: flex-end; z-index: 10 }
+.sheet > div { background: var(--paper); width: min(420px, 100%); height: 100%; overflow-y: auto; padding: calc(18px + env(safe-area-inset-top, 0px)) 18px calc(18px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 16px; border-left: 1px solid var(--line) }
+.sheet h2 { font: 800 1.35rem/1.1 var(--font-display); margin: 0; flex: 1 }
+.sheet-head { display: flex; align-items: center; gap: 10px }
+.field { display: grid; gap: 4px }
+.field label, .field .lab { font-weight: 700; font-size: .9rem }
+.field small { color: var(--muted); font-size: .8rem }
+.field select, .field input[type=text], .field input[type=password] { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 10px; width: 100% }
+.mode { font-size: .85rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px }
+.mode b { color: var(--accent) }
+.notes { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
+.notes li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .92rem }
+.notes s { color: var(--muted) }
+.notes mark { background: var(--mark); color: var(--mark-ink); padding: 0 3px; border-radius: 3px }
+.notes .why { color: var(--muted); display: block; margin-top: 3px }
+.notes time { float: right; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums }
+.row { display: flex; gap: 8px; flex-wrap: wrap }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 12px; font-size: .9rem }
+.btn.danger { color: var(--danger) }
+.empty { color: var(--muted); font-size: .92rem }
+.big-state { display: none; text-align: center; font: 800 1.7rem/1.15 var(--font-display); margin: 0 }
+.big-state[data-state="listening"] { color: var(--listen) }
+.big-state[data-state="speaking"], .big-state[data-state="thinking"] { color: var(--accent) }
+#mic[data-state="speaking"] { background: var(--accent) }
+body.car .big-state { display: block }
+body.car #mic { width: 128px; height: 128px }
+body.car #mic svg { width: 52px; height: 52px }
+body.car #log { font-size: 1.12rem }
+body.car form.typed { display: none }
+body.car .side { width: 110px; font-size: .95rem }
+body.car .side .btn { padding: 12px 16px; font-size: 1rem }
+@media (prefers-reduced-motion: reduce) { #mic[data-state="listening"]::after { animation: none; opacity: .6 } }
+</style>
+
+<div class="app">
+  <header>
+    <h1 class="brand"><span>Fluent</span></h1>
+    <div class="status" id="status" aria-live="polite">Prêt</div>
+    <button class="icon-btn" id="openNotes" type="button" aria-label="Carnet de corrections">Carnet <span class="count" id="noteCount">0</span></button>
+    <button class="icon-btn" id="openSettings" type="button">Réglages</button>
+  </header>
+
+  <main id="log" aria-live="polite"></main>
+
+  <div class="talkbar">
+    <p class="big-state" id="bigState" data-state="idle">Prêt</p>
+    <p class="hint" id="hint">Appuyez sur le micro pour commencer la conversation.</p>
+    <div class="talk-row">
+      <div class="side"><label class="switch"><input type="checkbox" id="handsFree" checked> Mains libres</label></div>
+      <button id="mic" type="button" data-state="idle" aria-label="Parler">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
+      </button>
+      <div class="side"><button class="btn" id="stopAll" type="button">Pause</button></div>
+    </div>
+    <form class="typed" id="typed" autocomplete="off">
+      <input id="typedInput" type="text" placeholder="…ou écrivez / dictez au clavier" aria-label="Votre message">
+      <button type="submit">Envoyer</button>
+    </form>
+  </div>
+</div>
+
+<div class="sheet" id="notesSheet" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="notesTitle">
+    <div class="sheet-head"><h2 id="notesTitle">Carnet de corrections</h2><button class="btn" data-close type="button">Fermer</button></div>
+    <ul class="notes" id="notes"></ul>
+    <p class="empty" id="notesEmpty">Vos erreurs corrigées apparaîtront ici, pour les revoir plus tard.</p>
+    <div class="row">
+      <button class="btn" id="copyNotes" type="button">Copier tout</button>
+      <button class="btn danger" id="clearNotes" type="button">Vider le carnet</button>
+    </div>
+    <p class="empty" id="clearConfirm" hidden>Vider le carnet ? <button class="btn danger" id="clearYes" type="button">Oui, vider</button> <button class="btn" id="clearNo" type="button">Annuler</button></p>
+  </div>
+</div>
+
+<div class="sheet" id="settingsSheet" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="sheet-head"><h2 id="settingsTitle">Réglages</h2><button class="btn" data-close type="button">Fermer</button></div>
+    <div class="mode" id="modeBox">Détection du mode…</div>
+    <div class="field" id="keyField">
+      <label for="apiKey">Clé API Anthropic</label>
+      <input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off">
+      <small>Gardée uniquement dans ce navigateur. Créez-en une sur console.anthropic.com.</small>
+    </div>
+    <div class="field" id="modelField">
+      <label for="model">Modèle</label>
+      <select id="model">
+        <option value="claude-opus-5-5">Claude Opus 5.5 — meilleures corrections</option>
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — équilibré</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5 — le plus rapide</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="lang">Langue pratiquée</label>
+      <select id="lang"></select>
+    </div>
+    <div class="field">
+      <label for="level">Votre niveau</label>
+      <select id="level">
+        <option value="A2">A2 — élémentaire</option>
+        <option value="B1" selected>B1 — intermédiaire</option>
+        <option value="B2">B2 — intermédiaire avancé</option>
+        <option value="C1">C1 — avancé</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="topic">Sujet de conversation</label>
+      <input id="topic" type="text" placeholder="libre, voyage, entretien d'embauche, travail…">
+    </div>
+    <div class="field">
+      <label for="voice">Voix</label>
+      <select id="voice"></select>
+    </div>
+    <div class="field">
+      <label for="rate">Vitesse de la voix : <span id="rateVal">0.95</span></label>
+      <input id="rate" type="range" min="0.6" max="1.3" step="0.05" value="0.95">
+    </div>
+    <div class="field">
+      <label for="endWord">Mot de fin</label>
+      <input id="endWord" type="text">
+      <small>Dites ce mot à la fin de votre phrase pour que Claude réponde. Fluent écoute jusque-là, même si vous faites des pauses. Prenez un mot court et distinct de la langue pratiquée ; chaque langue en propose un par défaut. Laissez vide pour envoyer après un silence.</small>
+    </div>
+    <div class="field" id="patienceField">
+      <label for="patience">Silence avant envoi : <span id="patienceVal">1.8</span> s</label>
+      <input id="patience" type="range" min="1" max="4" step="0.2" value="1.8">
+      <small>Utilisé seulement sans mot de fin.</small>
+    </div>
+    <div class="field">
+      <span class="lab">Mode voiture</span>
+      <label class="switch"><input type="checkbox" id="carMode"> Grand affichage, réponses courtes, écoute prolongée</label>
+      <small>L'écran reste allumé pendant la conversation. Commandes à la voix : demandez de répéter, de parler plus lentement ou plus vite, de changer de sujet ou de faire une pause.</small>
+    </div>
+    <div class="field">
+      <span class="lab">Corrections</span>
+      <label class="switch"><input type="checkbox" id="frExplain" checked> Explications en français (sinon dans la langue pratiquée)</label>
+      <label class="switch"><input type="checkbox" id="speakFix" checked> Lire la correction à voix haute</label>
+    </div>
+    <div class="row"><button class="btn" id="newChat" type="button">Nouvelle conversation</button></div>
+  </div>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("fluent:" + k); return v === null ? d : JSON.parse(v) } catch { return d } },
+  set(k, v) { try { localStorage.setItem("fluent:" + k, JSON.stringify(v)) } catch {} },
+};
+
+// ---------- languages ----------
+// name: how the tutor prompt names the language; end: default end word; tip: spoken before a correction.
+const LANGS = {
+  "en-US": { label: "Anglais (américain)", name: "American English", end: "over", tip: "Quick tip: you can say",
+    example: ["Hi! What did you do last weekend?", "I have went to the cinema with my sister.", "I have went", "I went", "Pour une action terminée à un moment précis, on utilise le prétérit.", "Nice! What movie did you see, and would you recommend it?"] },
+  "en-GB": { label: "Anglais (britannique)", name: "British English", end: "over", tip: "Quick tip: you can say",
+    example: ["Hi! What did you get up to at the weekend?", "I have went to the cinema with my sister.", "I have went", "I went", "Pour une action terminée à un moment précis, on utilise le prétérit.", "Lovely! What film did you see?"] },
+  "es-ES": { label: "Espagnol (Espagne)", name: "Spanish as spoken in Spain", end: "cambio", tip: "Un consejo: puedes decir",
+    example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", "« Película » est féminin : l'adjectif s'accorde.", "¡Vaya! ¿Qué película era?"] },
+  "es-MX": { label: "Espagnol (Mexique)", name: "Mexican Spanish", end: "cambio", tip: "Un consejo: puedes decir",
+    example: ["¡Hola! ¿Qué hiciste el fin de semana?", "Fui al cine con mi hermana, pero la película era muy aburrido.", "muy aburrido", "muy aburrida", "« Película » est féminin : l'adjectif s'accorde.", "¡Qué mala onda! ¿Qué película era?"] },
+  "de-DE": { label: "Allemand", name: "German", end: "fertig", tip: "Kleiner Tipp: Du kannst sagen",
+    example: ["Hallo! Was hast du am Wochenende gemacht?", "Ich habe ins Kino gegangen mit meiner Schwester.", "Ich habe ins Kino gegangen", "Ich bin ins Kino gegangen", "« Gehen » forme son parfait avec « sein ».", "Schön! Welchen Film habt ihr gesehen?"] },
+  "it-IT": { label: "Italien", name: "Italian", end: "passo", tip: "Un consiglio: puoi dire",
+    example: ["Ciao! Cosa hai fatto nel fine settimana?", "Ho andato al cinema con mia sorella.", "Ho andato", "Sono andato", "« Andare » se conjugue avec « essere » au passé composé.", "Bello! Che film avete visto?"] },
+  "pt-BR": { label: "Portugais (Brésil)", name: "Brazilian Portuguese", end: "câmbio", tip: "Uma dica: você pode dizer",
+    example: ["Oi! O que você fez no fim de semana?", "Eu tenho ido ao cinema com minha irmã no sábado.", "Eu tenho ido", "Eu fui", "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", "Que legal! Que filme vocês viram?"] },
+  "pt-PT": { label: "Portugais (Portugal)", name: "European Portuguese", end: "câmbio", tip: "Uma dica: pode dizer",
+    example: ["Olá! O que fizeste no fim de semana?", "Eu tenho ido ao cinema com a minha irmã no sábado.", "Eu tenho ido", "Eu fui", "Pour une action ponctuelle passée, on emploie le pretérito perfeito.", "Que giro! Que filme viram?"] },
+  "nl-NL": { label: "Néerlandais", name: "Dutch", end: "over", tip: "Een tip: je kunt zeggen",
+    example: ["Hoi! Wat heb je in het weekend gedaan?", "Ik heb naar de bioscoop gegaan met mijn zus.", "Ik heb naar de bioscoop gegaan", "Ik ben naar de bioscoop gegaan", "« Gaan » forme son parfait avec « zijn ».", "Leuk! Welke film hebben jullie gezien?"] },
+};
+for (const [code, l] of Object.entries(LANGS)) $("lang").add(new Option(l.label, code));
+const L = () => LANGS[settings.lang] || LANGS["en-US"];
+
+// ---------- settings ----------
+const stored = store.get("settings", {});
+const settings = Object.assign({
+  apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
+  rate: 0.95, patience: 1.8, endWord: null, frExplain: true, speakFix: true, handsFree: true, carMode: false,
+}, stored);
+delete settings.accent;
+if (!LANGS[settings.lang]) settings.lang = "en-US";
+if (settings.endWord === null) settings.endWord = L().end;
+const saveSettings = () => store.set("settings", settings);
+
+function bindSetting(id, key, kind = "value") {
+  const el = $(id);
+  if (kind === "checked") el.checked = settings[key]; else el.value = settings[key];
+  el.addEventListener("change", () => {
+    settings[key] = kind === "checked" ? el.checked : (el.type === "range" ? Number(el.value) : el.value.trim());
+    saveSettings(); onSettingChange(key);
+  });
+}
+[["apiKey","apiKey"],["model","model"],["lang","lang"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
+[["frExplain","frExplain"],["speakFix","speakFix"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
+$("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
+$("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
+$("rateVal").textContent = settings.rate; $("patienceVal").textContent = settings.patience;
+let prevLang = settings.lang;
+function onSettingChange(key) {
+  if (key === "lang") {
+    // Follow the new language's end word unless the learner chose their own.
+    if (settings.endWord === LANGS[prevLang]?.end) { settings.endWord = L().end; $("endWord").value = settings.endWord; saveSettings(); renderEndWord() }
+    prevLang = settings.lang;
+    fillVoices();
+    if (!turns.length) renderExample();
+  }
+  if (key === "carMode") renderCar();
+  if (key === "apiKey") renderMode();
+  if (key === "endWord") renderEndWord();
+}
+function renderEndWord() {
+  $("patienceField").hidden = !!settings.endWord;
+  $("typedInput").placeholder = settings.endWord
+    ? `…ou dictez au clavier, finissez par « ${settings.endWord} »`
+    : "…ou écrivez / dictez au clavier";
+}
+
+// ---------- backend: Claude in the artifact viewer, else the user's API key ----------
+let sample = null;      // claude.ai artifact capability
+let anthropic = null;   // SDK client
+const ready = (async () => {
+  if (window.claude?.use) { try { sample = await window.claude.use("sample") } catch { sample = null } }
+  renderMode();
+})();
+
+function renderMode() {
+  const box = $("modeBox");
+  if (sample) {
+    box.innerHTML = "<b>Mode Claude.ai</b> : les réponses utilisent votre compte Claude, sans clé. Le micro de la page n'est pas accessible ici : dictez avec le micro de votre clavier dans le champ texte, en finissant par votre mot de fin. Pour la conversation vocale mains libres, ouvrez la version autonome dans Chrome.";
+    $("keyField").hidden = true; $("modelField").hidden = true;
+  } else {
+    box.innerHTML = settings.apiKey
+      ? "<b>Mode clé API</b> — les appels partent directement de ce navigateur vers l'API Anthropic."
+      : "<b>Clé API requise</b> — collez votre clé Anthropic ci-dessous pour commencer.";
+    $("keyField").hidden = false; $("modelField").hidden = false;
+  }
+}
+
+const ACTIONS = ["none", "repeat", "slower", "faster", "pause", "new_topic"];
+const SCHEMA = {
+  type: "object", additionalProperties: false,
+  required: ["action", "understood", "has_mistake", "original", "corrected", "explanation", "reply"],
+  properties: {
+    action: { type: "string", enum: ACTIONS },
+    understood: { type: "string" },
+    has_mistake: { type: "boolean" },
+    original: { type: "string" }, corrected: { type: "string" }, explanation: { type: "string" },
+    reply: { type: "string" },
+  },
+};
+
+function rules() {
+  const lang = L().name;
+  const topic = settings.topic || "anything the learner wants to talk about (daily life, work, plans, opinions, stories)";
+  const end = settings.endWord ? `\nThe learner ends each turn by saying "${settings.endWord}". If that word, or something that sounds like it, is left at the end of a message, ignore it.` : "";
+  const length = settings.carMode
+    ? "1 or 2 short sentences, easy to follow by ear: the learner is driving and only listens"
+    : "1 to 3 short sentences";
+  return `You are Fluent, a conversation partner in ${lang} for a French-speaking adult learner at CEFR level ${settings.level}. Always speak ${lang}.
+Topic: ${topic}.
+
+Be a real conversation partner, not an interviewer: react to what they actually said, pick up on details, share brief opinions, experiences or surprising facts of your own, disagree sometimes, and vary your questions. Keep the exchange interesting and natural, the way a curious friend would talk.
+
+How the learner's messages reach you: they speak ${lang} with a marked French accent and the text comes from automatic speech recognition, which often mishears accented speech (sounds French speakers typically confuse, wrong word boundaries, French words slipping in). When available, other recognizer hypotheses are listed after the transcript. Work out what they most plausibly meant from context, the hypotheses and typical French-accent confusions. They do not want pronunciation feedback: never treat recognition errors or accent as mistakes and never mention pronunciation. If you truly cannot tell what they meant, say so naturally in your reply and ask them to say it another way.${end}
+
+Voice commands: if the learner asks you, in ${lang} or in French, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic", with has_mistake false. For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", propose a new subject with a question. Otherwise "action" is "none".
+
+For each learner message, return JSON with:
+- action: as above.
+- understood: the sentence you believe they meant, keeping their own wording and grammar and fixing only speech-recognition errors.
+- has_mistake: true only if "understood" contains a real grammar, vocabulary or phrasing error that a teacher would correct at this level.
+- original: the wrong fragment from "understood" (a few words), else "".
+- corrected: the natural corrected version of that fragment, else "".
+- explanation: one short sentence explaining the rule, in ${settings.frExplain ? "French" : `simple ${lang}`}; else "".
+- reply: ${length} of natural spoken ${lang} at the learner's level, ending with something that invites them to keep talking (usually one question). Do not repeat the correction in reply. No markdown, lists or emoji: it is read aloud.
+Correct only the single most useful mistake per message.`;
+}
+
+const OPENING = "(The learner just opened the app. Greet them briefly and ask an easy, engaging opening question about the topic. action is \"none\", understood is \"\" and has_mistake is false.)";
+let turns = [];  // {role, content} — what the tutor and learner actually said
+
+async function askTutor() {
+  await ready;
+  const recent = turns.slice(-30);
+  if (recent[0]?.role !== "user") recent.shift();
+  if (sample) {
+    const input = [{ role: "user", content: rules() + "\n\nReply with only the JSON object. The conversation follows." }, ...recent];
+    return await sample.json(input, { modelTier: "default", effort: "low", cache: false });
+  }
+  if (!settings.apiKey) { openSheet("settingsSheet"); throw { userMessage: "Ajoutez votre clé API Anthropic dans les réglages." } }
+  if (!anthropic) {
+    const { default: Anthropic } = await import("https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0/+esm");
+    anthropic = new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
+  } else if (anthropic.apiKey !== settings.apiKey) {
+    anthropic = new anthropic.constructor({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
+  }
+  const fallback = settings.model === "claude-haiku-5-5" ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
+  const res = await anthropic.beta.messages.create({
+    model: settings.model, max_tokens: 4000, system: rules(), messages: recent,
+    output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
+    ...fallback,
+  });
+  if (res.stop_reason === "refusal") throw { userMessage: "Claude a refusé de répondre à ce message. Essayez de reformuler." };
+  const text = res.content.find((b) => b.type === "text")?.text;
+  if (!text) throw { userMessage: "Réponse vide. Réessayez." };
+  return JSON.parse(text);
+}
+
+function errorText(e) {
+  if (e?.userMessage) return e.userMessage;
+  const status = e?.status;
+  if (status === 401) return "Clé API refusée. Vérifiez-la dans les réglages.";
+  if (status === 429) return "Trop de requêtes ou crédit épuisé. Attendez un peu.";
+  if (status === 529 || status >= 500) return "Le service Claude est surchargé. Réessayez dans un instant.";
+  switch (e?.code) {
+    case "not_granted": return "Accès à Claude refusé pour cette page. Autorisez-le pour continuer.";
+    case "rate_limited": return "Limite d'utilisation atteinte. Réessayez plus tard.";
+    case "invalid_json": return "Réponse illisible. Renvoyez votre message.";
+    case "session_expired": return "Session Claude expirée : reconnectez-vous.";
+  }
+  return "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.";
+}
+
+// ---------- speech synthesis ----------
+const synth = window.speechSynthesis;
+let voices = [];
+const voicesFor = (code) => {
+  const all = synth ? synth.getVoices() : [];
+  const base = code.slice(0, 2).toLowerCase();
+  const same = all.filter((v) => v.lang?.toLowerCase().startsWith(base));
+  const exact = same.filter((v) => v.lang.replace("_", "-").toLowerCase() === code.toLowerCase());
+  return (exact.length ? exact : same).sort((a, b) => score(b) - score(a));
+};
+function fillVoices() {
+  if (!synth) return;
+  voices = voicesFor(settings.lang);
+  const sel = $("voice");
+  sel.innerHTML = "";
+  for (const v of voices) sel.add(new Option(`${v.name} (${v.lang})`, v.name));
+  if (!voices.find((v) => v.name === settings.voice)) settings.voice = voices[0]?.name || "";
+  sel.value = settings.voice;
+}
+function score(v) { return /natural|neural|online|premium|enhanced/i.test(v.name) * 3 + /google/i.test(v.name) * 2 }
+if (synth) { fillVoices(); synth.addEventListener?.("voiceschanged", fillVoices) }
+$("voice").addEventListener("change", (e) => { settings.voice = e.target.value; saveSettings() });
+
+function speak(text, lang) {
+  return new Promise((resolve) => {
+    if (!synth || !text) return resolve();
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = lang ? voicesFor(lang)[0] : voices.find((x) => x.name === settings.voice);
+    if (v) u.voice = v;
+    u.lang = v?.lang || lang || settings.lang;
+    u.rate = lang ? 1 : settings.rate;
+    u.onend = u.onerror = () => resolve();
+    synth.speak(u);
+  });
+}
+// Spoken status messages, in French, so nothing needs to be read on screen while driving.
+const say = (text) => speak(text, "fr-FR");
+
+// ---------- keep the screen on during a conversation ----------
+let active = false, wakeLock = null;
+async function setActive(on) {
+  active = on;
+  if (on && !wakeLock && navigator.wakeLock && document.visibilityState === "visible") {
+    try { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null }) } catch {}
+  }
+  if (!on && wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && active) setActive(true) });
+
+// ---------- speech recognition ----------
+// One listening "session" spans several recognizer runs: Chrome stops after a silence
+// (and on Android after every phrase), so we restart until the end word or the silence timeout.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, session = null, silenceTimer = 0, micBlocked = !SR;
+let state = "idle";
+const idleLimit = () => settings.carMode ? 600000 : 90000;  // stop listening after this long without speech
+
+function setState(s, hint) {
+  state = s;
+  $("mic").dataset.state = s;
+  $("mic").disabled = s === "thinking";
+  $("mic").setAttribute("aria-label", s === "listening" ? "Terminer et envoyer" : s === "speaking" ? "Interrompre et parler" : "Parler");
+  const label = { idle: "Prêt", listening: "Je vous écoute…", thinking: "Claude réfléchit…", speaking: "Claude parle…" }[s];
+  $("status").textContent = label;
+  $("bigState").textContent = s === "listening" && settings.endWord ? `À vous… (« ${settings.endWord} »)` : label;
+  $("bigState").dataset.state = s;
+  if (hint !== undefined) $("hint").textContent = hint;
+}
+
+const words = (t) => t.toLowerCase().replace(/[^\p{L}\p{N}']+/gu, " ").split(" ").filter(Boolean);
+const norm = (t) => words(t).join(" ");
+function endsWithEndWord(text) {
+  const w = words(settings.endWord || ""), t = words(text || "");
+  return w.length > 0 && t.length >= w.length && w.every((x, i) => t[t.length - w.length + i] === x);
+}
+function dropLastWords(text, n) { return text.trim().split(/\s+/).slice(0, -n || undefined).join(" ").replace(/[\s,;:.!?-]+$/, "") }
+
+function listeningHint() {
+  return settings.endWord
+    ? `Parlez, prenez votre temps. Dites « ${settings.endWord} » pour terminer.`
+    : "Parlez. J'envoie après un court silence, ou touchez le micro.";
+}
+
+function listen() {
+  if (micBlocked) { micFallback(); return }
+  synth?.cancel();
+  session = { done: [], alts: [], current: null, finishing: false, cancelled: false, lastSpeech: Date.now() };
+  setActive(true);
+  setState("listening", listeningHint());
+  showInterim("");
+  startRun(session);
+}
+
+function startRun(s) {
+  const r = new SR();
+  rec = r;
+  r.lang = settings.lang;
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 4;
+  r.onresult = (ev) => {
+    // Rebuilt from all results each time: Chrome on Android repeats earlier text inside later results.
+    const segs = [], segAlts = [];
+    let interim = "";
+    for (let i = 0; i < ev.results.length; i++) {
+      const res = ev.results[i], t = res[0].transcript.trim();
+      if (!t) continue;
+      if (!res.isFinal) { interim += " " + t; continue }
+      const alts = Array.from(res).slice(1).map((a) => a.transcript.trim()).filter((a) => a && norm(a) !== norm(t) && !endsWithEndWord(a));
+      const last = segs[segs.length - 1];
+      if (last && norm(t).startsWith(norm(last))) { segs[segs.length - 1] = t; segAlts[segAlts.length - 1] = alts }
+      else if (last && norm(last).startsWith(norm(t))) continue;
+      else { segs.push(t); segAlts.push(alts) }
+    }
+    interim = interim.trim();
+    if (segs.length && interim && norm(interim).startsWith(norm(segs[segs.length - 1]))) interim = interim.slice(segs[segs.length - 1].length).trim();
+    s.current = { segs, segAlts, interim };
+    s.lastSpeech = Date.now();
+    s.emptyRuns = 0; s.netErrors = 0;
+    showInterim(sessionText(s));
+    if (settings.endWord) {
+      const lastSeg = segs[segs.length - 1];
+      const candidates = [interim, lastSeg, ...(segAlts[segAlts.length - 1] || [])];
+      if (!interim && candidates.some(endsWithEndWord)) finish(s);
+    } else {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => finish(s), settings.patience * 1000);
+    }
+  };
+  r.onerror = (ev) => {
+    if (["not-allowed", "service-not-allowed", "audio-capture"].includes(ev.error)) { s.cancelled = true; micBlocked = true; micFallback() }
+    else if (ev.error === "network") {
+      // Brief network loss (tunnel, dead zone): keep retrying with a growing delay.
+      s.netErrors = (s.netErrors || 0) + 1;
+      s.emptyRuns = (s.emptyRuns || 0) + 2;
+      if (s.netErrors === 1) { $("hint").textContent = "Réseau perdu, je réessaie…"; say("Réseau perdu, je réessaie.") }
+      if (s.netErrors > 12) { s.cancelled = true; session = null; clearInterim(); setActive(false); addNotice("Pas de réseau pour la reconnaissance vocale. Touchez le micro quand la connexion revient."); setState("idle", ""); say("Pas de réseau. Je me mets en pause.") }
+    }
+  };
+  r.onend = () => {
+    if (rec === r) rec = null;
+    if (!s.current) s.emptyRuns = (s.emptyRuns || 0) + 1;
+    commitRun(s);
+    if (s.cancelled || session !== s) return;
+    if (s.finishing) return complete(s);
+    if (Date.now() - s.lastSpeech > idleLimit()) { session = null; clearInterim(); setActive(false); setState("idle", "Écoute en pause faute de parole. Touchez le micro pour reprendre."); say("Je me mets en pause."); return }
+    const delay = Math.min(3000, 120 * 2 ** Math.max(0, (s.emptyRuns || 0) - 2));  // back off when nothing is heard
+    setTimeout(() => { if (session === s && !s.cancelled && !s.finishing) startRun(s) }, delay);
+  };
+  try { r.start() }
+  catch { s.cancelled = true; micBlocked = true; micFallback() }
+}
+
+function commitRun(s) {
+  const c = s.current;
+  if (!c) return;
+  s.done.push(...c.segs); s.alts.push(...c.segAlts);
+  if (c.interim) { s.done.push(c.interim); s.alts.push([]) }
+  s.current = null;
+}
+function sessionText(s) {
+  const c = s.current || { segs: [], interim: "" };
+  return [...s.done, ...c.segs, c.interim].filter(Boolean).join(" ");
+}
+
+// Ends the session and sends what was said (end word, silence, or a tap on the mic).
+function finish(s) {
+  if (s.finishing || s.cancelled) return;
+  s.finishing = true;
+  clearTimeout(silenceTimer);
+  if (rec) rec.stop(); else complete(s);
+}
+function complete(s) {
+  if (session !== s) return;
+  session = null;
+  clearInterim();
+  let text = s.done.join(" ").trim();
+  const alts = s.alts.filter((a) => a.length);
+  if (settings.endWord) {
+    if (endsWithEndWord(text)) text = dropLastWords(text, words(settings.endWord).length);
+    else if (s.alts.at(-1)?.some(endsWithEndWord)) text = dropLastWords(text, 1);
+  }
+  if (text) send(text, alts);
+  else setState("idle", "Je n'ai rien entendu. Touchez le micro pour parler.");
+}
+function stopListening(discard) {
+  const s = session;
+  if (!s) return;
+  if (discard) { s.cancelled = true; session = null; clearTimeout(silenceTimer); rec?.abort(); clearInterim() }
+  else finish(s);
+}
+
+function micFallback() {
+  session = null; clearInterim();
+  setState("idle", "");
+  const msg = !SR
+    ? "La reconnaissance vocale n'est pas disponible dans ce navigateur. Utilisez Chrome ou Edge, ou la dictée de votre clavier dans le champ ci-dessous."
+    : "Le micro est bloqué ici. Utilisez la dictée de votre clavier (touche micro du clavier du téléphone) dans le champ ci-dessous, ou ouvrez la version autonome de Fluent dans Chrome.";
+  if (!document.querySelector(".notice")) addNotice(msg);
+  $("typedInput").focus();
+}
+
+// ---------- transcript UI ----------
+let started = false;
+function ensureStarted() {
+  if (started) return;
+  started = true;
+  $("log").innerHTML = "";
+}
+function scrollDown() { const l = $("log"); l.scrollTop = l.scrollHeight }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e }
+
+let interimEl = null;
+function showInterim(text) {
+  ensureStarted();
+  if (!interimEl) { interimEl = el("div", "turn me"); interimEl.append(el("div", "bubble interim")); $("log").append(interimEl) }
+  interimEl.firstChild.textContent = text || "…";
+  scrollDown();
+}
+function clearInterim() { interimEl?.remove(); interimEl = null }
+
+function addMe(text) { const t = el("div", "turn me"); t.append(el("div", "bubble", text)); $("log").append(t); scrollDown(); return t }
+function addUnderstood(meEl, understood, said) {
+  if (!meEl || !understood || norm(understood) === norm(said)) return;
+  meEl.append(el("div", "understood", "Compris : " + understood));
+}
+function addTutor(data) {
+  const t = el("div", "turn tutor");
+  if (data.has_mistake && data.corrected) t.append(fixEl(data, "div", "fix"));
+  t.append(el("div", "bubble", data.reply));
+  const again = el("button", "replay", "Réécouter"); again.type = "button";
+  again.onclick = () => speak(data.reply);
+  t.append(again);
+  $("log").append(t); scrollDown();
+}
+function fixEl(d, tag, cls) {
+  const f = el(tag, cls);
+  if (cls === "fix") f.append(el("span", "label", "Correction"));
+  if (d.original) { f.append(el("s", null, d.original), " → ") }
+  f.append(el("mark", null, d.corrected));
+  if (d.explanation) f.append(el("span", "why", d.explanation));
+  return f;
+}
+function addNotice(text) { ensureStarted(); $("log").append(el("div", "notice", text)); scrollDown() }
+
+// ---------- conversation loop ----------
+// What Claude receives for a spoken turn: the transcript plus the recognizer's other hypotheses.
+function packTurn(text, alts) {
+  if (!alts?.length) return text;
+  const lines = alts.map((a, i) => `${i + 1}. ${a.slice(0, 3).join(" | ")}`).join("\n");
+  return `${text}\n\n[Other speech-recognition hypotheses, per segment:\n${lines}]`;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const retryable = (e) => !e?.userMessage && (e?.status === undefined || e.status >= 500 || e.status === 429 || e?.code === "upstream_error") && !["not_granted", "sampling_disabled", "session_expired", "refused", "invalid_json", "rate_limited"].includes(e?.code);
+let lastReply = "";
+
+async function send(text, alts) {
+  ensureStarted();
+  setActive(true);
+  const opening = text === OPENING;
+  const meEl = opening ? null : addMe(text);
+  turns.push({ role: "user", content: opening ? OPENING : packTurn(text, alts) });
+  setState("thinking", "");
+  let data;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      data = await askTutor();
+      if (!data || typeof data.reply !== "string") throw { userMessage: "Réponse illisible. Renvoyez votre message." };
+      break;
+    } catch (e) {
+      if (attempt < 3 && retryable(e)) {
+        if (attempt === 0) { $("hint").textContent = "Connexion difficile, je réessaie…"; say("Connexion difficile, je réessaie.") }
+        await sleep(2000 * 2 ** attempt);
+        continue;
+      }
+      turns.pop();
+      meEl?.classList.add("failed");
+      addNotice(errorText(e));
+      if (opening) { turns = []; setActive(false); setState("idle", "Touchez le micro pour réessayer."); return }
+      await say("Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.");
+      if (settings.handsFree && !micBlocked) listen(); else setState("idle", "Touchez le micro pour réessayer.");
+      return;
+    }
+  }
+  const action = ACTIONS.includes(data.action) ? data.action : "none";
+  if (action === "repeat") {
+    turns.pop();  // the command itself is not part of the conversation
+    meEl?.remove();
+    setState("speaking", "Touchez le micro pour couper la parole.");
+    await speak(lastReply);
+    return afterSpeaking();
+  }
+  if (action === "slower" || action === "faster") {
+    settings.rate = Math.min(1.3, Math.max(0.6, Math.round((settings.rate + (action === "slower" ? -0.1 : 0.1)) * 100) / 100));
+    $("rate").value = settings.rate; $("rateVal").textContent = settings.rate; saveSettings();
+  }
+  turns.push({ role: "assistant", content: data.reply || "OK." });
+  if (action === "none") addUnderstood(meEl, data.understood, text);
+  if (data.reply) { addTutor(data); lastReply = data.reply }
+  if (action === "none" && data.has_mistake && data.corrected) saveNote(data);
+  setState("speaking", "Touchez le micro pour couper la parole.");
+  if (action === "none" && settings.speakFix && data.has_mistake && data.corrected) await speak(`${L().tip}: ${data.corrected}.`);
+  if (state !== "speaking") return;
+  await speak(data.reply);
+  if (action === "pause") { setActive(false); setState("idle", "En pause. Touchez le micro pour reprendre."); return }
+  afterSpeaking();
+}
+
+function afterSpeaking() {
+  if (state !== "speaking") return;
+  if (settings.handsFree && !micBlocked) listen();
+  else setState("idle", micBlocked ? "Répondez dans le champ ci-dessous." : "À vous ! Touchez le micro pour répondre.");
+}
+
+function start() {
+  ensureStarted();
+  // A first speak() inside the tap unlocks audio on iOS.
+  if (synth) { const u = new SpeechSynthesisUtterance(""); synth.speak(u) }
+  send(OPENING);
+}
+
+$("mic").addEventListener("click", () => {
+  if (state === "thinking") return;
+  if (!started || turns.length === 0) return start();
+  if (state === "listening") return stopListening(false);
+  if (state === "listening" || session) return;
+  if (state === "speaking") { synth?.cancel(); setState("idle") }
+  listen();
+});
+$("stopAll").addEventListener("click", () => {
+  synth?.cancel(); stopListening(true); setActive(false);
+  if (state !== "thinking") setState("idle", "En pause. Appuyez sur le micro pour reprendre.");
+});
+// Keyboard dictation (e.g. Gboard's mic): saying the end word sends the message.
+$("typedInput").addEventListener("input", () => {
+  const v = $("typedInput").value;
+  if (settings.endWord && endsWithEndWord(v) && state !== "thinking") {
+    $("typedInput").value = dropLastWords(v, words(settings.endWord).length);
+    $("typed").requestSubmit();
+  }
+});
+$("typed").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = $("typedInput").value.trim();
+  if (!v || state === "thinking") return;
+  $("typedInput").value = "";
+  synth?.cancel(); stopListening(true);
+  send(v);
+});
+$("newChat").addEventListener("click", () => {
+  synth?.cancel(); stopListening(true); setActive(false); turns = []; lastReply = "";
+  $("log").innerHTML = ""; started = true; closeSheets();
+  setState("idle", "Nouvelle conversation. Appuyez sur le micro pour commencer.");
+});
+
+// ---------- notebook ----------
+let notes = store.get("notes", []);
+function saveNote(d) {
+  notes.unshift({ original: d.original, corrected: d.corrected, explanation: d.explanation, at: Date.now() });
+  notes = notes.slice(0, 300); store.set("notes", notes); renderNotes();
+}
+function renderNotes() {
+  $("noteCount").textContent = notes.length;
+  const ul = $("notes"); ul.innerHTML = "";
+  for (const n of notes) {
+    const li = fixEl(n, "li", "");
+    li.prepend(el("time", null, new Date(n.at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })));
+    ul.append(li);
+  }
+  $("notesEmpty").hidden = notes.length > 0;
+}
+renderNotes();
+$("copyNotes").addEventListener("click", async () => {
+  const txt = notes.map((n) => `${n.original ? n.original + " → " : ""}${n.corrected}${n.explanation ? " (" + n.explanation + ")" : ""}`).join("\n");
+  try { await navigator.clipboard.writeText(txt); $("copyNotes").textContent = "Copié" }
+  catch { $("copyNotes").textContent = "Copie impossible" }
+  setTimeout(() => $("copyNotes").textContent = "Copier tout", 1600);
+});
+$("clearNotes").addEventListener("click", () => $("clearConfirm").hidden = false);
+$("clearNo").addEventListener("click", () => $("clearConfirm").hidden = true);
+$("clearYes").addEventListener("click", () => { notes = []; store.set("notes", notes); renderNotes(); $("clearConfirm").hidden = true });
+
+// ---------- sheets ----------
+function openSheet(id) { $(id).hidden = false; $(id).querySelector("[data-close]").focus() }
+function closeSheets() { document.querySelectorAll(".sheet").forEach((s) => s.hidden = true) }
+$("openNotes").addEventListener("click", () => openSheet("notesSheet"));
+$("openSettings").addEventListener("click", () => openSheet("settingsSheet"));
+document.querySelectorAll(".sheet").forEach((s) => {
+  s.addEventListener("click", (e) => { if (e.target === s || e.target.matches("[data-close]")) closeSheets() });
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheets() });
+
+function renderExample() {
+  const [q, said, orig, corr, why, reply] = L().example;
+  const log = $("log");
+  log.innerHTML = "";
+  log.append(el("span", "example-tag", "Exemple"));
+  const t1 = el("div", "turn tutor"); t1.append(el("div", "bubble", q));
+  const t2 = el("div", "turn me"); t2.append(el("div", "bubble", said));
+  const t3 = el("div", "turn tutor"); t3.append(fixEl({ original: orig, corrected: corr, explanation: why }, "div", "fix"), el("div", "bubble", reply));
+  log.append(t1, t2, t3);
+}
+function renderCar() { document.body.classList.toggle("car", !!settings.carMode) }
+renderExample();
+renderCar();
+renderEndWord();
+if (!SR) $("hint").textContent = "Appuyez sur le micro pour commencer (ou écrivez ci-dessous : la reconnaissance vocale demande Chrome ou Edge).";
+</script>
+</body>
+</html>
