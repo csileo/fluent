@@ -96,6 +96,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         if (mode == micMode) return@post
         micMode = mode
         recognizer?.destroy(); recognizer = null
+        if (mode == "system") closeMic() else if (active && Build.VERSION.SDK_INT >= 33) openMic()
         diag("Mode micro : $mode")
     }
 
@@ -191,7 +192,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         if (wasStreaming && (sawText || streamBytes > 0)) {
             val secs = "%.1f".format(streamBytes / (2.0 * STREAM_RATE))
             val read = if (streamBytes > PIPE_BYTES) "lu par le moteur" else "pas lu par le moteur"
-            diag("Écoute #$listenNo terminée : $secs s de son, $read" + if (sawText) "" else ", aucun texte")
+            diag("Écoute #$listenNo terminée : $secs s de son, $read" + levelSummary() + if (sawText) "" else ", aucun texte")
         }
         if (sawText) stalls = 0
         // In streamed mode a recognizer is not reused (a stopped one can stay stuck without reading).
@@ -229,7 +230,6 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     private var lastPartial = ""
     private val packRequested = mutableSetOf<String>()
     @Volatile private var streamBytes = 0L
-    private var lastMicLogged = ""
 
     private fun listenerFor(id: Int) = object : RecognitionListener {
         private fun current() = id == currentRec
@@ -336,92 +336,141 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    // ---------- recording the call-mode microphone ----------
+    // ---------- the call-mode microphone ----------
+    // Opened once per conversation and kept running. Reopening it for every sentence, right after Claude's
+    // voice had played on the call channel, gave a silent microphone in the car. Each listening attempt only
+    // attaches a pipe to the running microphone; while Fluent speaks, the audio is dropped.
     @Volatile private var streaming = false
-    private var streamThread: Thread? = null
-    private var streamOut: ParcelFileDescriptor.AutoCloseOutputStream? = null
+    @Volatile private var streamOut: ParcelFileDescriptor.AutoCloseOutputStream? = null
     private var streamIn: ParcelFileDescriptor? = null
+    @Volatile private var micGeneration = 0
+    @Volatile private var micRunning = false
+    @Volatile private var speakingNow = false
+    // Per-attempt statistics for the diagnostics.
+    @Volatile private var levelSum = 0.0
+    @Volatile private var levelCount = 0
+    @Volatile private var levelMax = -100.0
+    @Volatile private var zeroChunks = 0
 
-    private fun startStream(): ParcelFileDescriptor? {
-        stopStream()
+    private fun carMicDevice(): AudioDeviceInfo? = audio.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull {
+        it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || (Build.VERSION.SDK_INT >= 31 && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+    }
+
+    private fun openMic(): Boolean {
+        if (micRunning) return true
         val minBuf = AudioRecord.getMinBufferSize(STREAM_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        // VOICE_RECOGNITION: no call-style echo cancellation, which can smother the voice after playback.
         val recorder = try {
             AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION, STREAM_RATE,
+                MediaRecorder.AudioSource.VOICE_RECOGNITION, STREAM_RATE,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, STREAM_RATE)
             )
         } catch (e: Exception) {
-            diag("Enregistrement impossible : ${e.message}"); return null
+            diag("Micro impossible à ouvrir : ${e.message}"); return false
         }
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-            recorder.release(); diag("Enregistrement non initialisé"); return null
+            recorder.release(); diag("Micro non initialisé"); return false
         }
-        val carMic = audio.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull {
-            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || (Build.VERSION.SDK_INT >= 31 && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
-        }
-        if (carMic != null) recorder.preferredDevice = carMic
-        val pipe = ParcelFileDescriptor.createPipe()
-        val out = ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
+        carMicDevice()?.let { recorder.preferredDevice = it }
         try { recorder.startRecording() } catch (e: Exception) {
-            diag("Démarrage enregistrement impossible : ${e.message}")
-            recorder.release(); out.close(); pipe[0].close(); return null
+            diag("Démarrage du micro impossible : ${e.message}"); recorder.release(); return false
         }
-        streamBytes = 0
-        streaming = true
-        streamOut = out
-        streamIn = pipe[0]
-        streamThread = Thread {
-            val samples = ShortArray(STREAM_RATE / 10)  // 100 ms
-            val bytes = ByteArray(samples.size * 2)
-            var lastLevel = 0L
-            try {
-                while (streaming) {
-                    val n = recorder.read(samples, 0, samples.size)
-                    if (n <= 0) continue
-                    var sum = 0.0
-                    for (i in 0 until n) {
-                        val v = samples[i].toInt()
-                        bytes[2 * i] = (v and 0xff).toByte()
-                        bytes[2 * i + 1] = (v shr 8 and 0xff).toByte()
-                        sum += v.toDouble() * v
-                    }
-                    out.write(bytes, 0, n * 2)
-                    if (streamBytes == 0L) {
-                        // Logged once per microphone, when the first audio actually reaches the recognizer.
-                        val d = recorder.routedDevice
-                        val mic = if (d == null) "inconnu" else "${deviceType(d.type)} ${d.productName}"
-                        if (mic != lastMicLogged) { lastMicLogged = mic; diag("Son transmis au moteur, micro : $mic") }
-                    }
-                    streamBytes += n * 2
-                    val now = System.currentTimeMillis()
-                    if (now - lastLevel > 150) {
-                        lastLevel = now
-                        val rms = Math.sqrt(sum / n) / 32768.0
-                        // About -60 dBFS (silence) to -10 dBFS (loud speech) mapped to 0..1.
-                        val db = 20 * Math.log10(rms.coerceAtLeast(1e-6))
-                        emitLevel(((db + 60) / 50).toFloat().coerceIn(0f, 1f))
-                    }
+        val generation = ++micGeneration
+        micRunning = true
+        Thread { readMic(recorder, generation) }.start()
+        return true
+    }
+
+    private fun closeMic() {
+        micRunning = false
+        micGeneration++
+    }
+
+    private fun reopenMic() {
+        closeMic()
+        openMic()
+    }
+
+    private fun readMic(recorder: AudioRecord, generation: Int) {
+        val samples = ShortArray(STREAM_RATE / 10)  // 100 ms
+        val bytes = ByteArray(samples.size * 2)
+        var lastLevel = 0L
+        var micLogged = false
+        try {
+            while (micRunning && generation == micGeneration) {
+                val n = recorder.read(samples, 0, samples.size)
+                if (n <= 0) continue
+                if (!micLogged) {
+                    micLogged = true
+                    val d = recorder.routedDevice
+                    diag("Micro ouvert : " + (if (d == null) "appareil inconnu" else "${deviceType(d.type)} ${d.productName}"))
                 }
-            } catch (e: Exception) {
-                // The recognizer stopped reading: this utterance is over.
-            } finally {
-                try { out.close() } catch (e: Exception) {}
-                try { recorder.stop() } catch (e: Exception) {}
-                recorder.release()
+                var sum = 0.0
+                var peak = 0
+                for (i in 0 until n) {
+                    val v = samples[i].toInt()
+                    bytes[2 * i] = (v and 0xff).toByte()
+                    bytes[2 * i + 1] = (v shr 8 and 0xff).toByte()
+                    sum += v.toDouble() * v
+                    if (Math.abs(v) > peak) peak = Math.abs(v)
+                }
+                val rms = Math.sqrt(sum / n) / 32768.0
+                val db = 20 * Math.log10(rms.coerceAtLeast(1e-6))
+                val now = System.currentTimeMillis()
+                if (now - lastLevel > 150) {
+                    lastLevel = now
+                    // About -60 dBFS (silence) to -10 dBFS (loud speech) mapped to 0..1.
+                    emitLevel(((db + 60) / 50).toFloat().coerceIn(0f, 1f))
+                }
+                if (speakingNow) continue
+                val out = streamOut ?: continue
+                levelSum += db; levelCount++
+                if (db > levelMax) levelMax = db
+                // Real microphones always pick up some noise: exact zeros for 3 s mean a muted capture.
+                if (peak == 0) zeroChunks++ else zeroChunks = 0
+                if (zeroChunks == 30) main.post { zeroChunks = 0; diag("Micro muet (son nul depuis 3 s) : réouverture du micro"); reopenMic() }
+                try {
+                    out.write(bytes, 0, n * 2)
+                    streamBytes += n * 2
+                } catch (e: Exception) {
+                    // The attempt ended and its pipe was closed: keep the microphone running for the next one.
+                    if (streamOut === out) streamOut = null
+                }
             }
-        }.also { it.start() }
+        } catch (e: Exception) {
+            diag("Micro interrompu : ${e.message}")
+        } finally {
+            try { recorder.stop() } catch (e: Exception) {}
+            recorder.release()
+            if (generation == micGeneration) micRunning = false
+        }
+    }
+
+    private fun startStream(): ParcelFileDescriptor? {
+        stopStream()
+        if (!openMic()) return null
+        val pipe = ParcelFileDescriptor.createPipe()
+        streamBytes = 0
+        levelSum = 0.0; levelCount = 0; levelMax = -100.0; zeroChunks = 0
+        streamIn = pipe[0]
+        streamOut = ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
+        streaming = true
         return pipe[0]
     }
 
+    // Detaches the current attempt from the microphone (which keeps running).
     private fun stopStream() {
         streaming = false
-        streamThread = null
-        // Closing the pipe also unblocks a write the recognizer is no longer reading.
-        try { streamOut?.close() } catch (e: Exception) {}
-        try { streamIn?.close() } catch (e: Exception) {}
+        val out = streamOut
         streamOut = null
+        // Closing the pipe also unblocks a write the recognizer is no longer reading.
+        try { out?.close() } catch (e: Exception) {}
+        try { streamIn?.close() } catch (e: Exception) {}
         streamIn = null
     }
+
+    private fun levelSummary(): String =
+        if (levelCount == 0) "" else ", niveau moyen %.0f dB, max %.0f dB".format(levelSum / levelCount, levelMax)
 
     // True when a partial result starts a new piece rather than revising the current one.
     private fun startsOver(previous: String, next: String): Boolean {
@@ -497,6 +546,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
                 .build()
         )
         pendingTts = id
+        speakingNow = true
         engine.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "u$id")
     }
 
@@ -504,6 +554,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     fun stopSpeaking() = main.post {
         val id = pendingTts
         pendingTts = 0
+        speakingNow = false
         tts?.stop()
         if (id != 0) emitTts(id)
     }
@@ -511,7 +562,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     private fun ttsFinished(utteranceId: String) {
         val id = utteranceId.removePrefix("u").toIntOrNull() ?: return
         main.post {
-            if (pendingTts == id) pendingTts = 0
+            if (pendingTts == id) { pendingTts = 0; speakingNow = false }
             emitTts(id)
         }
     }
@@ -528,9 +579,12 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         if (on) {
             requestFocus()
             applyRoute()
+            if (micMode != "system" && Build.VERSION.SDK_INT >= 33) openMic()
             service.putExtra(ConversationService.EXTRA_TEXT, if (routedToBluetooth) "Conversation (Bluetooth)" else "Conversation")
             try { activity.startForegroundService(service) } catch (e: Exception) {}
         } else {
+            stopStream()
+            closeMic()
             clearRoute()
             abandonFocus()
             activity.stopService(service)
@@ -558,6 +612,8 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         routedToBluetooth = ok
         if (!ok) audio.mode = AudioManager.MODE_NORMAL
         diag("Mode appel : ${device.productName} — " + if (ok) "activé" else "refusé")
+        // The route changed (car connected or not): reopen the microphone on the new route.
+        if (micRunning) reopenMic()
         emitRoute(if (ok) "bluetooth" else "phone", device.productName?.toString() ?: "")
     }
 
@@ -606,6 +662,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     fun release() {
         main.removeCallbacks(watchdog)
         stopStream()
+        closeMic()
         clearRoute()
         abandonFocus()
         recognizer?.destroy()
