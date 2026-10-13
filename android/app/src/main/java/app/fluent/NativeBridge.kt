@@ -100,6 +100,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     }
 
     private fun createRecognizer(): SpeechRecognizer {
+        readyLogged = false
         if (micMode == "stream_ondevice" && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)) {
             diag("Reconnaissance : sur l'appareil")
             return SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
@@ -143,9 +144,8 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
                 diag("Flux micro impossible, le service ouvre le micro lui-même")
             }
         }
+        // The recognizer may still be connecting: the pipe stays open until this utterance ends (stopStream).
         r.startListening(intent)
-        // The recognizer keeps its own copy of the pipe.
-        try { source?.close() } catch (e: Exception) {}
     }
 
     @JavascriptInterface
@@ -165,6 +165,9 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     }
 
     private var lastRmsEmit = 0L
+    private var readyLogged = false
+    @Volatile private var streamBytes = 0L
+    private var lastMicLogged = ""
 
     private fun listenerFor(id: Int) = object : RecognitionListener {
         private fun current() = id == currentRec
@@ -188,9 +191,10 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             if (!current()) return
             stopStream()
             if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                diag("Erreur reconnaissance : ${errorName(error)}")
+                val sent = if (streamBytes > 0) "%.1f s de son transmis".format(streamBytes / (2.0 * STREAM_RATE)) else "aucun son transmis"
+                diag("Erreur reconnaissance : ${errorName(error)} (code $error, mode $micMode, $sent)")
             }
-            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
+            if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
                 recognizer?.destroy(); recognizer = null
             }
             // The on-device recognizer may need its language pack: ask Android to download it.
@@ -216,7 +220,9 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             emitLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
         }
 
-        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onReadyForSpeech(params: Bundle?) {
+            if (!readyLogged) { readyLogged = true; diag("Moteur prêt à écouter") }
+        }
         override fun onBeginningOfSpeech() {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
@@ -227,6 +233,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     @Volatile private var streaming = false
     private var streamThread: Thread? = null
     private var streamOut: ParcelFileDescriptor.AutoCloseOutputStream? = null
+    private var streamIn: ParcelFileDescriptor? = null
 
     private fun startStream(): ParcelFileDescriptor? {
         stopStream()
@@ -252,12 +259,10 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             diag("Démarrage enregistrement impossible : ${e.message}")
             recorder.release(); out.close(); pipe[0].close(); return null
         }
-        main.postDelayed({
-            val d = recorder.routedDevice
-            diag("Micro utilisé : " + (if (d == null) "inconnu" else "${deviceType(d.type)} ${d.productName}"))
-        }, 400)
+        streamBytes = 0
         streaming = true
         streamOut = out
+        streamIn = pipe[0]
         streamThread = Thread {
             val samples = ShortArray(STREAM_RATE / 10)  // 100 ms
             val bytes = ByteArray(samples.size * 2)
@@ -274,6 +279,13 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
                         sum += v.toDouble() * v
                     }
                     out.write(bytes, 0, n * 2)
+                    if (streamBytes == 0L) {
+                        // Logged once per microphone, when the first audio actually reaches the recognizer.
+                        val d = recorder.routedDevice
+                        val mic = if (d == null) "inconnu" else "${deviceType(d.type)} ${d.productName}"
+                        if (mic != lastMicLogged) { lastMicLogged = mic; diag("Son transmis au moteur, micro : $mic") }
+                    }
+                    streamBytes += n * 2
                     val now = System.currentTimeMillis()
                     if (now - lastLevel > 150) {
                         lastLevel = now
@@ -299,7 +311,9 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         streamThread = null
         // Closing the pipe also unblocks a write the recognizer is no longer reading.
         try { streamOut?.close() } catch (e: Exception) {}
+        try { streamIn?.close() } catch (e: Exception) {}
         streamOut = null
+        streamIn = null
     }
 
     private fun errorName(code: Int) = when (code) {
