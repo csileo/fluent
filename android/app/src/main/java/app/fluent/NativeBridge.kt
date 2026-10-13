@@ -121,6 +121,8 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         }
         val r = recognizer ?: createRecognizer().also { recognizer = it }
         currentRec = id
+        currentLang = lang
+        lastPartial = ""
         r.setRecognitionListener(listenerFor(id))
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -153,6 +155,15 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         if (id != currentRec) return@post
         stopStream()
         recognizer?.stopListening()
+        // With a streamed source the recognizer may never answer: after a moment, send the last text it gave.
+        main.postDelayed({
+            if (id != currentRec) return@postDelayed
+            if (lastPartial.isNotBlank()) emitSr(id, "final", texts = listOf(lastPartial))
+            diag("Moteur muet après l'arrêt : envoi du dernier texte reconnu")
+            recognizer?.cancel()
+            currentRec = 0
+            emitSr(id, "end")
+        }, 1500)
     }
 
     @JavascriptInterface
@@ -166,6 +177,9 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
     private var lastRmsEmit = 0L
     private var readyLogged = false
+    private var currentLang = ""
+    private var lastPartial = ""
+    private val packRequested = mutableSetOf<String>()
     @Volatile private var streamBytes = 0L
     private var lastMicLogged = ""
 
@@ -174,17 +188,44 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
         override fun onPartialResults(bundle: Bundle) {
             if (!current()) return
+            val text = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull { it.isNotBlank() } ?: return
+            // A streamed session restarts its text after each pause. When the new text clearly starts over,
+            // keep the previous piece as finished instead of losing it.
+            if (startsOver(lastPartial, text)) commitPiece(lastPartial)
+            lastPartial = text
+            emitSr(id, "partial", texts = listOf(text))
+        }
+
+        // Pieces finished at each pause (Android 13+, streamed or segmented sessions).
+        override fun onSegmentResults(bundle: Bundle) {
+            if (!current()) return
             val texts = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.filter { it.isNotBlank() }
-            if (!texts.isNullOrEmpty()) emitSr(id, "partial", texts = texts.take(1))
+            lastPartial = ""
+            if (texts.isNullOrEmpty()) return
+            diag("Morceau reconnu : ${texts[0]}")
+            emitSr(id, "final", texts = texts)
+        }
+
+        override fun onEndOfSegmentedSession() {
+            if (!current()) return
+            stopStream()
+            currentRec = 0
+            emitSr(id, "end")
         }
 
         override fun onResults(bundle: Bundle) {
             if (!current()) return
             stopStream()
             val texts = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.filter { it.isNotBlank() }
-            if (!texts.isNullOrEmpty()) emitSr(id, "final", texts = texts)
+            lastPartial = ""
+            if (!texts.isNullOrEmpty()) { diag("Phrase reconnue : ${texts[0]}"); emitSr(id, "final", texts = texts) }
             currentRec = 0
             emitSr(id, "end")
+        }
+
+        private fun commitPiece(text: String) {
+            diag("Morceau reconnu : $text")
+            emitSr(id, "final", texts = listOf(text))
         }
 
         override fun onError(error: Int) {
@@ -197,14 +238,24 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
                 recognizer?.destroy(); recognizer = null
             }
-            // The on-device recognizer may need its language pack: ask Android to download it.
+            // The on-device recognizer needs the pack of the practised language: ask once, then fall back to mode 1.
             if (Build.VERSION.SDK_INT >= 33 && micMode == "stream_ondevice" &&
                 (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE || error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED)
             ) {
-                try {
-                    recognizer?.triggerModelDownload(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH))
-                    diag("Téléchargement du pack de langue demandé")
-                } catch (e: Exception) {}
+                if (packRequested.add(currentLang)) {
+                    try {
+                        recognizer?.triggerModelDownload(
+                            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE, currentLang)
+                        )
+                        diag("Pack de reconnaissance « $currentLang » demandé à Android")
+                    } catch (e: Exception) {
+                        diag("Téléchargement du pack « $currentLang » impossible : ${e.message}")
+                    }
+                }
+                diag("Retour au micro de l'appel avec la reconnaissance Google (mode 1)")
+                micMode = "stream"
+                recognizer?.destroy(); recognizer = null
+                emit(JSONObject().put("type", "micmode").put("mode", micMode))
             }
             emitSr(id, "error", webError(error))
             currentRec = 0
@@ -314,6 +365,14 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         try { streamIn?.close() } catch (e: Exception) {}
         streamOut = null
         streamIn = null
+    }
+
+    // True when a partial result starts a new piece rather than revising the current one.
+    private fun startsOver(previous: String, next: String): Boolean {
+        val a = previous.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val b = next.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (a.size < 2 || b.isEmpty()) return false
+        return b.size < a.size && b[0] != a[0]
     }
 
     private fun errorName(code: Int) = when (code) {

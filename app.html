@@ -698,20 +698,23 @@ window.__fluentNative = {
       const r = nativeRecs[e.id];
       if (!r) return;
       if (e.event === "partial" || e.event === "final") {
+        // Finished pieces add up; the partial text is the piece in progress.
         const res = (e.texts || []).map((t) => ({ transcript: t }));
         res.isFinal = e.event === "final";
-        r.onresult?.({ resultIndex: 0, results: [res] });
+        if (res.isFinal) { r.finals.push(res); r.interim = null } else r.interim = res;
+        r.onresult?.({ resultIndex: 0, results: r.interim ? [...r.finals, r.interim] : [...r.finals] });
       } else if (e.event === "error") r.onerror?.({ error: e.error });
       else if (e.event === "end") { delete nativeRecs[e.id]; r.onend?.() }
     } else if (e.type === "tts") { ttsWaiting[e.id]?.(); delete ttsWaiting[e.id] }
     else if (e.type === "voices") fillVoices();
     else if (e.type === "route") renderRoute(e);
     else if (e.type === "diag") addDiag(e.line);
+    else if (e.type === "micmode") { settings.micMode = e.mode; $("micMode").value = e.mode; saveSettings() }
     else if (e.type === "level") showLevel(e.level);
   },
 };
 class NativeSpeechRecognition {
-  constructor() { this.id = ++nativeSeq; this.lang = "en-US"; this.maxAlternatives = 4 }
+  constructor() { this.id = ++nativeSeq; this.lang = "en-US"; this.maxAlternatives = 4; this.finals = []; this.interim = null }
   start() { nativeRecs[this.id] = this; NATIVE.startListening(this.id, this.lang, this.maxAlternatives) }
   stop() { NATIVE.stopListening(this.id) }
   abort() { NATIVE.cancelListening(this.id) }
@@ -889,7 +892,8 @@ function startRun(s) {
     if (settings.endWord) {
       const lastSeg = segs[segs.length - 1];
       const candidates = [interim, lastSeg, ...(segAlts[segAlts.length - 1] || [])];
-      if (!interim && candidates.some(endsWithEndWord)) finish(s);
+      // In the browser, wait for final text; the app's partial text is reliable enough to stop on.
+      if ((!interim || NATIVE) && candidates.some(endsWithEndWord)) finish(s);
     } else {
       clearTimeout(silenceTimer);
       silenceTimer = setTimeout(() => finish(s), settings.patience * 1000);
