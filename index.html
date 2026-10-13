@@ -102,6 +102,9 @@ form.typed button { border: 0; background: var(--ink); color: var(--paper); bord
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 12px; font-size: .9rem }
 .btn.danger { color: var(--danger) }
 .empty { color: var(--muted); font-size: .92rem }
+.level { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; width: min(240px, 100%); justify-self: center }
+.level span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear }
+.diag { margin: 0; max-height: 220px; overflow: auto; font: .75rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere }
 .route { margin: 0; text-align: center; font-size: .82rem; font-weight: 700; color: var(--muted) }
 .route[data-route="bluetooth"] { color: var(--accent) }
 .big-state { display: none; text-align: center; font: 800 1.7rem/1.15 var(--font-display); margin: 0 }
@@ -132,6 +135,7 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
     <p class="big-state" id="bigState" data-state="idle"></p>
     <p class="hint" id="hint"></p>
     <p class="route" id="route" hidden></p>
+    <div class="level" id="mainLevel" hidden><span></span></div>
     <div class="talk-row">
       <div class="side"><label class="switch"><input type="checkbox" id="handsFree" checked> <span data-i="handsFree">Mains libres</span></label></div>
       <button id="mic" type="button" data-state="idle">
@@ -225,6 +229,21 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
       <label class="switch"><input type="checkbox" id="callMode" checked> <span data-i="callModeLabel"></span></label>
       <small data-i="callModeHelp"></small>
     </div>
+    <div class="field" id="micField" hidden>
+      <label for="micMode" data-i="micMode">Micro</label>
+      <select id="micMode">
+        <option value="stream" data-i="micStream"></option>
+        <option value="stream_ondevice" data-i="micOnDevice"></option>
+        <option value="system" data-i="micSystem"></option>
+      </select>
+      <small data-i="micHelp"></small>
+    </div>
+    <div class="field" id="diagField" hidden>
+      <span class="lab" data-i="diag">Diagnostic</span>
+      <div class="level" id="diagLevel"><span></span></div>
+      <pre class="diag" id="diagLog"></pre>
+      <div class="row"><button class="btn" id="copyDiag" type="button" data-i="copyDiag"></button></div>
+    </div>
     <div class="field">
       <span class="lab" data-i="carMode">Mode voiture</span>
       <label class="switch"><input type="checkbox" id="carMode"> <span data-i="carModeLabel"></span></label>
@@ -305,6 +324,10 @@ const I18N = {
     err5xx: "Le service Claude est surchargé. Réessayez dans un instant.", errNotGranted: "Accès à Claude refusé pour cette page. Autorisez-le pour continuer.",
     errRateLimited: "Limite d'utilisation atteinte. Réessayez plus tard.", errSession: "Session Claude expirée : reconnectez-vous.",
     errGeneric: "Impossible de joindre Claude. Vérifiez votre connexion et réessayez.",
+    micMode: "Micro", micStream: "Micro de l'appel (voiture en Bluetooth) — recommandé", micOnDevice: "Micro de l'appel, reconnaissance sur le téléphone",
+    micSystem: "Laisser Google ouvrir le micro (ancien mode)",
+    micHelp: "Fluent enregistre lui-même le micro utilisé pour les appels (celui de la voiture en Bluetooth) et le transmet à la reconnaissance vocale. Sans voiture, c'est le micro du téléphone.",
+    diag: "Diagnostic", copyDiag: "Copier le diagnostic", diagEmpty: "Lancez une conversation : les étapes du micro s'affichent ici.",
     promptLabel: "Instructions pour Claude",
     promptHelp: "Décrivez comment Claude doit discuter et corriger. Remplacés automatiquement : {langue}, {langue_maternelle}, {niveau}, {sujet}, {longueur_réponse}, {langue_explications}. Le format technique (commandes vocales, mot de fin, relevé des fautes) est ajouté par l'appli.",
     promptReset: "Rétablir le texte d'origine", noted: "Noté : ", resumeHint: "Touchez le micro pour reprendre la conversation.",
@@ -357,6 +380,10 @@ const I18N = {
     err5xx: "Claude is overloaded. Try again in a moment.", errNotGranted: "This page isn't allowed to use Claude. Allow it to continue.",
     errRateLimited: "Usage limit reached. Try again later.", errSession: "Your Claude session expired: sign in again.",
     errGeneric: "Couldn't reach Claude. Check your connection and try again.",
+    micMode: "Microphone", micStream: "Call microphone (car over Bluetooth) — recommended", micOnDevice: "Call microphone, on-phone recognition",
+    micSystem: "Let Google open the microphone (old mode)",
+    micHelp: "Fluent records the microphone used for calls itself (the car's over Bluetooth) and passes it to speech recognition. Without a car, it's the phone's microphone.",
+    diag: "Diagnostics", copyDiag: "Copy diagnostics", diagEmpty: "Start a conversation: the microphone steps show up here.",
     promptLabel: "Instructions for Claude",
     promptHelp: "Describe how Claude should talk and correct you. Filled in automatically: {language}, {native}, {level}, {topic}, {reply_length}, {explanation_language}. The app adds the technical part (voice commands, end word, mistake tracking).",
     promptReset: "Restore the original text", noted: "Noted: ", resumeHint: "Tap the mic to resume the conversation.",
@@ -414,7 +441,7 @@ const stored = store.get("settings", {});
 const browserFr = /^fr\b/i.test(navigator.language || "");
 const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
-  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true,
+  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true, micMode: "stream",
   ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
 }, stored);
 delete settings.accent; delete settings.frExplain;
@@ -443,7 +470,7 @@ function bindSetting(id, key, kind = "value") {
     saveSettings(); onSettingChange(key);
   });
 }
-[["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
+[["micMode","micMode"],["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
 [["nativeExplain","nativeExplain"],["callMode","callMode"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
 $("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
 $("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
@@ -459,6 +486,7 @@ function onSettingChange(key) {
     renderPrompt();
   }
   if (key === "carMode") renderCar();
+  if (key === "micMode") NATIVE?.setMicMode(settings.micMode);
   if (key === "callMode" && NATIVE && active) { NATIVE.setConversationActive(false, false); NATIVE.setConversationActive(true, settings.callMode) }
   if (key === "ui") applyI18n();
   if (["level", "topic", "carMode", "nativeExplain", "native"].includes(key)) renderPrompt();
@@ -685,6 +713,8 @@ window.__fluentNative = {
     } else if (e.type === "tts") { ttsWaiting[e.id]?.(); delete ttsWaiting[e.id] }
     else if (e.type === "voices") fillVoices();
     else if (e.type === "route") renderRoute(e);
+    else if (e.type === "diag") addDiag(e.line);
+    else if (e.type === "level") showLevel(e.level);
   },
 };
 class NativeSpeechRecognition {
@@ -763,6 +793,26 @@ async function setActive(on) {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && active) setActive(true) });
 
+// Microphone diagnostics (Android app): each step of the audio path, and the live input level.
+const diagLines = [];
+function addDiag(line) {
+  const time = new Date().toLocaleTimeString(settings.ui === "fr" ? "fr-FR" : "en-GB");
+  diagLines.push(`${time}  ${line}`);
+  if (diagLines.length > 60) diagLines.shift();
+  renderDiag();
+}
+function renderDiag() { $("diagLog").textContent = diagLines.length ? diagLines.join("\n") : t("diagEmpty") }
+function showLevel(level) {
+  const w = Math.round(level * 100) + "%";
+  $("diagLevel").firstChild.style.width = w;
+  $("mainLevel").firstChild.style.width = w;
+}
+$("copyDiag").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(diagLines.join("\n")); $("copyDiag").textContent = t("copied") }
+  catch { $("copyDiag").textContent = t("copyFailed") }
+  setTimeout(() => $("copyDiag").textContent = t("copyDiag"), 1600);
+});
+
 // Shows where sound goes: the car (Bluetooth call mode) or the phone.
 function renderRoute(e) {
   const el = $("route");
@@ -788,6 +838,7 @@ function setState(s, hint) {
   $("status").textContent = label;
   $("bigState").textContent = s === "listening" && settings.endWord ? t("yourTurnWord", { w: settings.endWord }) : label;
   $("bigState").dataset.state = s;
+  if (NATIVE) { $("mainLevel").hidden = s !== "listening"; if (s !== "listening") showLevel(0) }
   if (hint !== undefined) $("hint").textContent = hint;
 }
 
@@ -1192,6 +1243,7 @@ function applyI18n() {
   renderEndWord();
   renderNotes();
   renderPrompt();
+  renderDiag();
   if (log.length) renderLog(); else if (!turns.length) renderExample();
   setState(state);
 }
@@ -1206,6 +1258,9 @@ if (savedConversation?.log?.length) {
 }
 renderCar();
 $("callField").hidden = !NATIVE;
+$("micField").hidden = !NATIVE;
+$("diagField").hidden = !NATIVE;
+NATIVE?.setMicMode(settings.micMode);
 applyI18n();
 $("hint").textContent = log.length ? t("resumeHint") : SR ? t("startHint") : t("noSRHint");
 </script>

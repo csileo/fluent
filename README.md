@@ -24,6 +24,8 @@ Keep Chrome in the foreground: if the screen locks or you switch apps, Android t
 The Android app wraps the same interface and adds what a web page can't do:
 
 - **Bluetooth call mode**: during a conversation, the phone switches Bluetooth to call mode, so Fluent uses the car's microphone and speakers like a phone call (phone-call sound quality). Turn it off in **Settings** if you prefer.
+- **Car microphone**: by default Fluent records the call-mode microphone itself (the car's, over Bluetooth) and feeds it to speech recognition (Android 13+), so the car never sees a "voice command" request. **Settings → Microphone** also offers on-phone recognition or the old mode where Google opens the microphone.
+- **Diagnostics** in **Settings**: each step of the audio path, the live input level (also shown under the status while listening) and a button to copy it all.
 - **Native speech recognition and voices**, without Chrome's restarts.
 - A **foreground service** keeps the conversation running, with a notification while it lasts.
 

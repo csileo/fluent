@@ -6,11 +6,15 @@ import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
+import android.media.AudioFormat
+import android.media.AudioRecord
 import android.media.AudioManager
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -81,16 +85,40 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     }
 
     // ---------- speech recognition ----------
+    // Microphone modes:
+    //  "system": the recognizer opens the microphone itself (in a car, it may ask the car for voice-command mode).
+    //  "stream": Fluent records the call-mode microphone (the car's, over Bluetooth) and feeds the recognizer.
+    //  "stream_ondevice": same, with the on-device recognizer.
+    private var micMode = "stream"
+
+    @JavascriptInterface
+    fun setMicMode(mode: String) = main.post {
+        if (mode == micMode) return@post
+        micMode = mode
+        recognizer?.destroy(); recognizer = null
+        diag("Mode micro : $mode")
+    }
+
+    private fun createRecognizer(): SpeechRecognizer {
+        if (micMode == "stream_ondevice" && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)) {
+            diag("Reconnaissance : sur l'appareil")
+            return SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
+        }
+        diag("Reconnaissance : service Google")
+        return SpeechRecognizer.createSpeechRecognizer(activity)
+    }
 
     @JavascriptInterface
     fun startListening(id: Int, lang: String, maxAlternatives: Int) = main.post {
         if (activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            diag("Permission micro refusée")
             emitSr(id, "error", "not-allowed"); emitSr(id, "end"); return@post
         }
         if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
+            diag("Aucun service de reconnaissance vocale")
             emitSr(id, "error", "service-not-allowed"); emitSr(id, "end"); return@post
         }
-        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(activity).also { recognizer = it }
+        val r = recognizer ?: createRecognizer().also { recognizer = it }
         currentRec = id
         r.setRecognitionListener(listenerFor(id))
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -103,19 +131,40 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
         }
+        var source: ParcelFileDescriptor? = null
+        if (micMode != "system" && Build.VERSION.SDK_INT >= 33) {
+            source = startStream()
+            if (source != null) {
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, source)
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, STREAM_RATE)
+            } else {
+                diag("Flux micro impossible, le service ouvre le micro lui-même")
+            }
+        }
         r.startListening(intent)
+        // The recognizer keeps its own copy of the pipe.
+        try { source?.close() } catch (e: Exception) {}
     }
 
     @JavascriptInterface
-    fun stopListening(id: Int) = main.post { if (id == currentRec) recognizer?.stopListening() }
+    fun stopListening(id: Int) = main.post {
+        if (id != currentRec) return@post
+        stopStream()
+        recognizer?.stopListening()
+    }
 
     @JavascriptInterface
     fun cancelListening(id: Int) = main.post {
         if (id != currentRec) return@post
+        stopStream()
         recognizer?.cancel()
         currentRec = 0
         emitSr(id, "end")
     }
+
+    private var lastRmsEmit = 0L
 
     private fun listenerFor(id: Int) = object : RecognitionListener {
         private fun current() = id == currentRec
@@ -128,6 +177,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
         override fun onResults(bundle: Bundle) {
             if (!current()) return
+            stopStream()
             val texts = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.filter { it.isNotBlank() }
             if (!texts.isNullOrEmpty()) emitSr(id, "final", texts = texts)
             currentRec = 0
@@ -136,20 +186,148 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
         override fun onError(error: Int) {
             if (!current()) return
+            stopStream()
+            if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                diag("Erreur reconnaissance : ${errorName(error)}")
+            }
             if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || error == SpeechRecognizer.ERROR_CLIENT) {
                 recognizer?.destroy(); recognizer = null
+            }
+            // The on-device recognizer may need its language pack: ask Android to download it.
+            if (Build.VERSION.SDK_INT >= 33 && micMode == "stream_ondevice" &&
+                (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE || error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED)
+            ) {
+                try {
+                    recognizer?.triggerModelDownload(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH))
+                    diag("Téléchargement du pack de langue demandé")
+                } catch (e: Exception) {}
             }
             emitSr(id, "error", webError(error))
             currentRec = 0
             emitSr(id, "end")
         }
 
+        override fun onRmsChanged(rmsdB: Float) {
+            // In stream mode the level comes from Fluent's own recording instead.
+            if (streaming) return
+            val now = System.currentTimeMillis()
+            if (now - lastRmsEmit < 150) return
+            lastRmsEmit = now
+            emitLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
+        }
+
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    // ---------- recording the call-mode microphone ----------
+    @Volatile private var streaming = false
+    private var streamThread: Thread? = null
+    private var streamOut: ParcelFileDescriptor.AutoCloseOutputStream? = null
+
+    private fun startStream(): ParcelFileDescriptor? {
+        stopStream()
+        val minBuf = AudioRecord.getMinBufferSize(STREAM_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val recorder = try {
+            AudioRecord(
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION, STREAM_RATE,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, STREAM_RATE)
+            )
+        } catch (e: Exception) {
+            diag("Enregistrement impossible : ${e.message}"); return null
+        }
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            recorder.release(); diag("Enregistrement non initialisé"); return null
+        }
+        val carMic = audio.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || (Build.VERSION.SDK_INT >= 31 && it.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+        }
+        if (carMic != null) recorder.preferredDevice = carMic
+        val pipe = ParcelFileDescriptor.createPipe()
+        val out = ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
+        try { recorder.startRecording() } catch (e: Exception) {
+            diag("Démarrage enregistrement impossible : ${e.message}")
+            recorder.release(); out.close(); pipe[0].close(); return null
+        }
+        main.postDelayed({
+            val d = recorder.routedDevice
+            diag("Micro utilisé : " + (if (d == null) "inconnu" else "${deviceType(d.type)} ${d.productName}"))
+        }, 400)
+        streaming = true
+        streamOut = out
+        streamThread = Thread {
+            val samples = ShortArray(STREAM_RATE / 10)  // 100 ms
+            val bytes = ByteArray(samples.size * 2)
+            var lastLevel = 0L
+            try {
+                while (streaming) {
+                    val n = recorder.read(samples, 0, samples.size)
+                    if (n <= 0) continue
+                    var sum = 0.0
+                    for (i in 0 until n) {
+                        val v = samples[i].toInt()
+                        bytes[2 * i] = (v and 0xff).toByte()
+                        bytes[2 * i + 1] = (v shr 8 and 0xff).toByte()
+                        sum += v.toDouble() * v
+                    }
+                    out.write(bytes, 0, n * 2)
+                    val now = System.currentTimeMillis()
+                    if (now - lastLevel > 150) {
+                        lastLevel = now
+                        val rms = Math.sqrt(sum / n) / 32768.0
+                        // About -60 dBFS (silence) to -10 dBFS (loud speech) mapped to 0..1.
+                        val db = 20 * Math.log10(rms.coerceAtLeast(1e-6))
+                        emitLevel(((db + 60) / 50).toFloat().coerceIn(0f, 1f))
+                    }
+                }
+            } catch (e: Exception) {
+                // The recognizer stopped reading: this utterance is over.
+            } finally {
+                try { out.close() } catch (e: Exception) {}
+                try { recorder.stop() } catch (e: Exception) {}
+                recorder.release()
+            }
+        }.also { it.start() }
+        return pipe[0]
+    }
+
+    private fun stopStream() {
+        streaming = false
+        streamThread = null
+        // Closing the pipe also unblocks a write the recognizer is no longer reading.
+        try { streamOut?.close() } catch (e: Exception) {}
+        streamOut = null
+    }
+
+    private fun errorName(code: Int) = when (code) {
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "réseau (délai)"
+        SpeechRecognizer.ERROR_NETWORK -> "réseau"
+        SpeechRecognizer.ERROR_AUDIO -> "audio"
+        SpeechRecognizer.ERROR_SERVER -> "serveur"
+        SpeechRecognizer.ERROR_CLIENT -> "client"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "aucune parole"
+        SpeechRecognizer.ERROR_NO_MATCH -> "rien reconnu"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "occupé"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "permission"
+        SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> "trop de requêtes"
+        SpeechRecognizer.ERROR_SERVER_DISCONNECTED -> "serveur déconnecté"
+        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "langue non prise en charge"
+        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "langue indisponible (pack à télécharger)"
+        SpeechRecognizer.ERROR_CANNOT_CHECK_SUPPORT -> "vérification impossible"
+        SpeechRecognizer.ERROR_CANNOT_LISTEN_TO_DOWNLOAD_EVENTS -> "suivi du téléchargement impossible"
+        else -> "code $code"
+    }
+
+    private fun deviceType(type: Int) = when (type) {
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth (appel)"
+        AudioDeviceInfo.TYPE_BLE_HEADSET -> "Bluetooth LE"
+        AudioDeviceInfo.TYPE_BUILTIN_MIC -> "micro du téléphone"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "casque filaire"
+        AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET -> "USB"
+        else -> "type $type"
     }
 
     // Same error names as the Web Speech API, which the page already handles.
@@ -233,6 +411,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     private fun applyRoute() {
         val device = if (callMode) bluetoothDevice() else null
         if (device == null) {
+            if (callMode) diag("Mode appel : aucun appareil Bluetooth d'appel trouvé")
             clearRoute()
             emitRoute("phone", "")
             return
@@ -249,6 +428,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         }
         routedToBluetooth = ok
         if (!ok) audio.mode = AudioManager.MODE_NORMAL
+        diag("Mode appel : ${device.productName} — " + if (ok) "activé" else "refusé")
         emitRoute(if (ok) "bluetooth" else "phone", device.productName?.toString() ?: "")
     }
 
@@ -295,6 +475,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     }
 
     fun release() {
+        stopStream()
         clearRoute()
         abandonFocus()
         recognizer?.destroy()
@@ -311,6 +492,10 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         emit(e)
     }
 
+    private fun diag(line: String) = emit(JSONObject().put("type", "diag").put("line", line))
+
+    private fun emitLevel(level: Float) = emit(JSONObject().put("type", "level").put("level", level.toDouble()))
+
     private fun emitTts(id: Int) = emit(JSONObject().put("type", "tts").put("id", id))
 
     private fun emitRoute(route: String, name: String) =
@@ -318,5 +503,9 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
     private fun emit(event: JSONObject) = main.post {
         web.evaluateJavascript("window.__fluentNative && window.__fluentNative.onEvent($event)", null)
+    }
+
+    companion object {
+        private const val STREAM_RATE = 16000
     }
 }
