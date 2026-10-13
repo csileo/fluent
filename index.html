@@ -913,7 +913,8 @@ function startRun(s) {
       // Brief network loss (tunnel, dead zone): keep retrying with a growing delay.
       s.netErrors = (s.netErrors || 0) + 1;
       s.emptyRuns = (s.emptyRuns || 0) + 2;
-      if (s.netErrors === 1) { $("hint").textContent = t("netLostHint"); say("sayNetLost") }
+      // One isolated error is often the service hiccuping: announce only two in a row without any text.
+      if (s.netErrors === 2) { $("hint").textContent = t("netLostHint"); say("sayNetLost") }
       if (s.netErrors > 12) { s.cancelled = true; session = null; clearInterim(); setActive(false); addNotice(t("noNetNotice")); setState("idle", ""); say("sayNoNet") }
     }
   };

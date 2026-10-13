@@ -128,9 +128,8 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             emitSr(id, "error", "service-not-allowed"); emitSr(id, "end"); return@post
         }
         val streamed = micMode != "system" && Build.VERSION.SDK_INT >= 33
-        // In streamed mode a recognizer is not reused: after a stopped session it can stay stuck without reading.
-        val fresh = recognizer == null || streamed
-        if (streamed) { recognizer?.destroy(); recognizer = null }
+        // In streamed mode the previous recognizer was destroyed when its attempt ended (see endAttempt).
+        val fresh = recognizer == null
         val r = recognizer ?: createRecognizer().also { recognizer = it }
         listenNo++
         listenStart = System.currentTimeMillis()
@@ -195,6 +194,10 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             diag("Écoute #$listenNo terminée : $secs s de son, $read" + if (sawText) "" else ", aucun texte")
         }
         if (sawText) stalls = 0
+        // In streamed mode a recognizer is not reused (a stopped one can stay stuck without reading).
+        // Destroying it now, not when the next attempt starts, gives Google's service time to close the
+        // session while Claude answers; otherwise the new one fails at once with "server disconnected".
+        if (micMode != "system") { recognizer?.destroy(); recognizer = null }
         currentRec = 0
         emitSr(id, "end")
     }
@@ -273,6 +276,14 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
         override fun onError(error: Int) {
             if (!current()) return
+            // The service still closing a previous session: not a network problem, just listen again.
+            if (error == SpeechRecognizer.ERROR_SERVER_DISCONNECTED && !sawReady) {
+                diag("Écoute #$listenNo : service pas encore disponible (code 11), relance silencieuse")
+                recognizer?.destroy(); recognizer = null
+                emitSr(id, "error", "aborted")
+                endAttempt(id)
+                return
+            }
             if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                 val sent = if (streamBytes > 0) "%.1f s de son transmis".format(streamBytes / (2.0 * STREAM_RATE)) else "aucun son transmis"
                 diag("Erreur reconnaissance : ${errorName(error)} (code $error, mode $micMode, $sent)")
