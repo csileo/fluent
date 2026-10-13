@@ -99,15 +99,23 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         diag("Mode micro : $mode")
     }
 
+    private var engineLogged = ""
+
     private fun createRecognizer(): SpeechRecognizer {
-        readyLogged = false
-        if (micMode == "stream_ondevice" && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)) {
-            diag("Reconnaissance : sur l'appareil")
-            return SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
-        }
-        diag("Reconnaissance : service Google")
-        return SpeechRecognizer.createSpeechRecognizer(activity)
+        val onDevice = micMode == "stream_ondevice" && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
+        val name = if (onDevice) "sur l'appareil" else "service Google"
+        if (engineLogged != name) { engineLogged = name; diag("Reconnaissance : $name") }
+        return if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
+        else SpeechRecognizer.createSpeechRecognizer(activity)
     }
+
+    // One listening attempt ("écoute") per startListening call, numbered for the diagnostics.
+    private var listenNo = 0
+    private var listenStart = 0L
+    private var sawReady = false
+    private var sawText = false
+    private var stalls = 0
+    private val watchdog = Runnable { checkStalled() }
 
     @JavascriptInterface
     fun startListening(id: Int, lang: String, maxAlternatives: Int) = main.post {
@@ -119,10 +127,19 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             diag("Aucun service de reconnaissance vocale")
             emitSr(id, "error", "service-not-allowed"); emitSr(id, "end"); return@post
         }
+        val streamed = micMode != "system" && Build.VERSION.SDK_INT >= 33
+        // In streamed mode a recognizer is not reused: after a stopped session it can stay stuck without reading.
+        val fresh = recognizer == null || streamed
+        if (streamed) { recognizer?.destroy(); recognizer = null }
         val r = recognizer ?: createRecognizer().also { recognizer = it }
+        listenNo++
+        listenStart = System.currentTimeMillis()
+        sawReady = false
+        sawText = false
         currentRec = id
         currentLang = lang
         lastPartial = ""
+        if (fresh) diag("Écoute #$listenNo : moteur neuf")
         r.setRecognitionListener(listenerFor(id))
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -134,9 +151,8 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
         }
-        var source: ParcelFileDescriptor? = null
-        if (micMode != "system" && Build.VERSION.SDK_INT >= 33) {
-            source = startStream()
+        if (streamed) {
+            val source = startStream()
             if (source != null) {
                 intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, source)
                 intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
@@ -146,8 +162,41 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
                 diag("Flux micro impossible, le service ouvre le micro lui-même")
             }
         }
-        // The recognizer may still be connecting: the pipe stays open until this utterance ends (stopStream).
+        // The recognizer may still be connecting: the pipe stays open until this attempt ends (stopStream).
         r.startListening(intent)
+        main.removeCallbacks(watchdog)
+        main.postDelayed(watchdog, WATCHDOG_MS)
+    }
+
+    // A recognizer that never gets ready, or never reads the audio Fluent sends, is replaced.
+    private fun checkStalled() {
+        val id = currentRec
+        if (id == 0) return
+        val reading = streamBytes > PIPE_BYTES
+        val stalled = !sawReady || (streaming && !reading && !sawText)
+        if (!stalled) { stalls = 0; return }
+        stalls++
+        diag("Écoute #$listenNo : moteur bloqué (" + (if (!sawReady) "jamais prêt" else "ne lit pas le son") + "), relance $stalls")
+        recognizer?.cancel()
+        recognizer?.destroy(); recognizer = null
+        if (stalls >= 3) { stalls = 0; emit(JSONObject().put("type", "stalled")) }
+        emitSr(id, "error", "aborted")
+        endAttempt(id)
+    }
+
+    // Ends the current attempt: stops recording, logs what happened, and lets the page listen again.
+    private fun endAttempt(id: Int) {
+        main.removeCallbacks(watchdog)
+        val wasStreaming = streaming || streamBytes > 0
+        stopStream()
+        if (wasStreaming && (sawText || streamBytes > 0)) {
+            val secs = "%.1f".format(streamBytes / (2.0 * STREAM_RATE))
+            val read = if (streamBytes > PIPE_BYTES) "lu par le moteur" else "pas lu par le moteur"
+            diag("Écoute #$listenNo terminée : $secs s de son, $read" + if (sawText) "" else ", aucun texte")
+        }
+        if (sawText) stalls = 0
+        currentRec = 0
+        emitSr(id, "end")
     }
 
     @JavascriptInterface
@@ -159,24 +208,20 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         main.postDelayed({
             if (id != currentRec) return@postDelayed
             if (lastPartial.isNotBlank()) emitSr(id, "final", texts = listOf(lastPartial))
-            diag("Moteur muet après l'arrêt : envoi du dernier texte reconnu")
+            diag("Écoute #$listenNo : moteur muet après l'arrêt, envoi du dernier texte reconnu")
             recognizer?.cancel()
-            currentRec = 0
-            emitSr(id, "end")
+            endAttempt(id)
         }, 1500)
     }
 
     @JavascriptInterface
     fun cancelListening(id: Int) = main.post {
         if (id != currentRec) return@post
-        stopStream()
         recognizer?.cancel()
-        currentRec = 0
-        emitSr(id, "end")
+        endAttempt(id)
     }
 
     private var lastRmsEmit = 0L
-    private var readyLogged = false
     private var currentLang = ""
     private var lastPartial = ""
     private val packRequested = mutableSetOf<String>()
@@ -189,6 +234,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         override fun onPartialResults(bundle: Bundle) {
             if (!current()) return
             val text = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull { it.isNotBlank() } ?: return
+            sawText = true
             // A streamed session restarts its text after each pause. When the new text clearly starts over,
             // keep the previous piece as finished instead of losing it.
             if (startsOver(lastPartial, text)) commitPiece(lastPartial)
@@ -202,25 +248,22 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
             val texts = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.filter { it.isNotBlank() }
             lastPartial = ""
             if (texts.isNullOrEmpty()) return
+            sawText = true
             diag("Morceau reconnu : ${texts[0]}")
             emitSr(id, "final", texts = texts)
         }
 
         override fun onEndOfSegmentedSession() {
             if (!current()) return
-            stopStream()
-            currentRec = 0
-            emitSr(id, "end")
+            endAttempt(id)
         }
 
         override fun onResults(bundle: Bundle) {
             if (!current()) return
-            stopStream()
             val texts = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.filter { it.isNotBlank() }
             lastPartial = ""
-            if (!texts.isNullOrEmpty()) { diag("Phrase reconnue : ${texts[0]}"); emitSr(id, "final", texts = texts) }
-            currentRec = 0
-            emitSr(id, "end")
+            if (!texts.isNullOrEmpty()) { sawText = true; diag("Phrase reconnue : ${texts[0]}"); emitSr(id, "final", texts = texts) }
+            endAttempt(id)
         }
 
         private fun commitPiece(text: String) {
@@ -230,7 +273,6 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
         override fun onError(error: Int) {
             if (!current()) return
-            stopStream()
             if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                 val sent = if (streamBytes > 0) "%.1f s de son transmis".format(streamBytes / (2.0 * STREAM_RATE)) else "aucun son transmis"
                 diag("Erreur reconnaissance : ${errorName(error)} (code $error, mode $micMode, $sent)")
@@ -258,8 +300,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
                 emit(JSONObject().put("type", "micmode").put("mode", micMode))
             }
             emitSr(id, "error", webError(error))
-            currentRec = 0
-            emitSr(id, "end")
+            endAttempt(id)
         }
 
         override fun onRmsChanged(rmsdB: Float) {
@@ -272,7 +313,11 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         }
 
         override fun onReadyForSpeech(params: Bundle?) {
-            if (!readyLogged) { readyLogged = true; diag("Moteur prêt à écouter") }
+            if (!current()) return
+            if (!sawReady) {
+                sawReady = true
+                diag("Écoute #$listenNo : moteur prêt (${System.currentTimeMillis() - listenStart} ms)")
+            }
         }
         override fun onBeginningOfSpeech() {}
         override fun onBufferReceived(buffer: ByteArray?) {}
@@ -548,6 +593,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
     }
 
     fun release() {
+        main.removeCallbacks(watchdog)
         stopStream()
         clearRoute()
         abandonFocus()
@@ -580,5 +626,8 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
     companion object {
         private const val STREAM_RATE = 16000
+        // An Android pipe holds about 64 KB (2 s of audio): more than that sent means the recognizer is reading.
+        private const val PIPE_BYTES = 70_000L
+        private const val WATCHDOG_MS = 4000L
     }
 }

@@ -336,7 +336,7 @@ const I18N = {
     routeCar: "Son : {name} (Bluetooth)", routePhone: "Son : téléphone",
     // spoken messages (native language)
     sayNetLost: "Réseau perdu, je réessaie.", sayNoNet: "Pas de réseau. Je me mets en pause.", sayIdle: "Je me mets en pause.",
-    sayRetry: "Connexion difficile, je réessaie.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
+    sayRetry: "Connexion difficile, je réessaie.", sayMicStalled: "Le micro ne répond pas, je le relance.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
   },
   en: {
     ready: "Ready", listening: "Listening…", thinking: "Claude is thinking…", speaking: "Claude is speaking…",
@@ -391,7 +391,7 @@ const I18N = {
     callModeHelp: "During the conversation, the phone switches Bluetooth to call mode. Sound is phone-call quality.",
     routeCar: "Audio: {name} (Bluetooth)", routePhone: "Audio: phone",
     sayNetLost: "Network lost, retrying.", sayNoNet: "No network. Pausing.", sayIdle: "Pausing.",
-    sayRetry: "Poor connection, retrying.", sayFail: "I couldn't reach Claude. Please say that again.",
+    sayRetry: "Poor connection, retrying.", sayMicStalled: "The microphone isn't responding, restarting it.", sayFail: "I couldn't reach Claude. Please say that again.",
   },
 };
 // Native languages: name used in the tutor prompt, voice for spoken messages.
@@ -716,6 +716,7 @@ window.__fluentNative = {
     else if (e.type === "voices") fillVoices();
     else if (e.type === "route") renderRoute(e);
     else if (e.type === "diag") addDiag(e.line);
+    else if (e.type === "stalled") say("sayMicStalled");
     else if (e.type === "micmode") { settings.micMode = e.mode; $("micMode").value = e.mode; saveSettings() }
     else if (e.type === "level") showLevel(e.level);
   },
