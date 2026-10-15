@@ -336,6 +336,7 @@ const I18N = {
     routeCar: "Son : {name} (Bluetooth)", routePhone: "Son : téléphone",
     // spoken messages (native language)
     sayNetLost: "Réseau perdu, je réessaie.", sayNoNet: "Pas de réseau. Je me mets en pause.", sayIdle: "Je me mets en pause.",
+    emptyIgnored: "Phrase vide ignorée, écoute relancée",
     sayRetry: "Connexion difficile, je réessaie.", sayMicStalled: "Le micro ne répond pas, je le relance.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
   },
   en: {
@@ -391,6 +392,7 @@ const I18N = {
     callModeHelp: "During the conversation, the phone switches Bluetooth to call mode. Sound is phone-call quality.",
     routeCar: "Audio: {name} (Bluetooth)", routePhone: "Audio: phone",
     sayNetLost: "Network lost, retrying.", sayNoNet: "No network. Pausing.", sayIdle: "Pausing.",
+    emptyIgnored: "Empty sentence ignored, listening again",
     sayRetry: "Poor connection, retrying.", sayMicStalled: "The microphone isn't responding, restarting it.", sayFail: "I couldn't reach Claude. Please say that again.",
   },
 };
@@ -962,7 +964,11 @@ function complete(s) {
     else if (s.alts.at(-1)?.some(endsWithEndWord)) text = dropLastWords(text, 1);
   }
   if (text) send(text, alts);
-  else setState("idle", t("heardNothing"));
+  else if (settings.handsFree && !micBlocked) {
+    // Only the end word, or nothing usable: nothing to send, keep listening.
+    if (NATIVE) addDiag(t("emptyIgnored"));
+    listen();
+  } else setState("idle", t("heardNothing"));
 }
 function stopListening(discard) {
   const s = session;
