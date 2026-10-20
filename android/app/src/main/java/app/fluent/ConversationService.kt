@@ -10,10 +10,20 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 
 // Keeps Fluent alive with the microphone in use while a conversation runs, even if the app goes to the background.
 class ConversationService : Service() {
+    // Keeps the processor running with the screen off, so requests to Claude and the voice are not put on hold.
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
+        super.onDestroy()
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
@@ -43,6 +53,11 @@ class ConversationService : Service() {
         } catch (e: Exception) {
             // Refused (e.g. started while in the background): the conversation still runs in the foreground.
             stopSelf()
+        }
+        if (wakeLock == null) {
+            wakeLock = getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "fluent:conversation")
+                .also { it.acquire(4 * 60 * 60 * 1000L) }  // released when the conversation stops; 4 h at most
         }
         return START_NOT_STICKY
     }

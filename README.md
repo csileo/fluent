@@ -11,6 +11,7 @@ Available languages: English (American, British), Spanish (Spain, Mexico), Germa
 - **Hands-free**: after each reply has been read aloud, Fluent starts listening again.
 - **Instructions for Claude**: in **Settings**, the full text that tells Claude how to talk and when and how to correct you is editable (in French or English, with placeholders such as `{language}` or `{level}`). By default Claude chats like a friend, corrects important mistakes right away, lets small ones go and brings them up once the same kind comes back 3 times, weaving the correction into its reply.
 - **Saved conversation**: settings, notebook and the current conversation are kept when you close the app; **New conversation** starts over.
+- **Confirmation sound**: a short, soft two-note sound tells you your sentence was received and Claude is thinking (can be turned off in **Settings**).
 - **Voice commands**: ask Claude, in the language you are practising or in your native language, to repeat, to speak more slowly or faster, to change the subject or to pause.
 
 ## Car mode
@@ -27,7 +28,7 @@ The Android app wraps the same interface and adds what a web page can't do:
 - **Car microphone**: by default Fluent records the call-mode microphone itself (the car's, over Bluetooth) and feeds it to speech recognition (Android 13+), so the car never sees a "voice command" request. **Settings → Microphone** also offers on-phone recognition or the old mode where Google opens the microphone.
 - **Diagnostics** in **Settings**: each step of the audio path, the live input level (also shown under the status while listening) and a button to copy it all.
 - **Native speech recognition and voices**, without Chrome's restarts.
-- A **foreground service** keeps the conversation running, with a notification while it lasts.
+- A **foreground service** keeps the conversation running with the screen off, with a notification while it lasts; requests to Claude are sent by the app itself so they don't wait for the screen to come back on.
 
 Install:
 

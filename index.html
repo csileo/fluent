@@ -245,6 +245,10 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
       <div class="row"><button class="btn" id="copyDiag" type="button" data-i="copyDiag"></button></div>
     </div>
     <div class="field">
+      <span class="lab" data-i="chimeLab">Son de confirmation</span>
+      <label class="switch"><input type="checkbox" id="chime" checked> <span data-i="chimeLabel"></span></label>
+    </div>
+    <div class="field">
       <span class="lab" data-i="carMode">Mode voiture</span>
       <label class="switch"><input type="checkbox" id="carMode"> <span data-i="carModeLabel"></span></label>
       <small data-i="carModeHelp"></small>
@@ -337,6 +341,7 @@ const I18N = {
     // spoken messages (native language)
     sayNetLost: "Réseau perdu, je réessaie.", sayNoNet: "Pas de réseau. Je me mets en pause.", sayIdle: "Je me mets en pause.",
     emptyIgnored: "Phrase vide ignorée, écoute relancée",
+    chimeLab: "Son de confirmation", chimeLabel: "Un son court quand votre phrase est reçue et que Claude réfléchit",
     sayRetry: "Connexion difficile, je réessaie.", sayMicStalled: "Le micro ne répond pas, je le relance.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
   },
   en: {
@@ -393,6 +398,7 @@ const I18N = {
     routeCar: "Audio: {name} (Bluetooth)", routePhone: "Audio: phone",
     sayNetLost: "Network lost, retrying.", sayNoNet: "No network. Pausing.", sayIdle: "Pausing.",
     emptyIgnored: "Empty sentence ignored, listening again",
+    chimeLab: "Confirmation sound", chimeLabel: "A short sound when your sentence is received and Claude is thinking",
     sayRetry: "Poor connection, retrying.", sayMicStalled: "The microphone isn't responding, restarting it.", sayFail: "I couldn't reach Claude. Please say that again.",
   },
 };
@@ -443,7 +449,7 @@ const stored = store.get("settings", {});
 const browserFr = /^fr\b/i.test(navigator.language || "");
 const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
-  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true, micMode: "stream",
+  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true, micMode: "stream", chime: true,
   ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
 }, stored);
 delete settings.accent; delete settings.frExplain;
@@ -473,7 +479,7 @@ function bindSetting(id, key, kind = "value") {
   });
 }
 [["micMode","micMode"],["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
-[["nativeExplain","nativeExplain"],["callMode","callMode"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
+[["nativeExplain","nativeExplain"],["chime","chime"],["callMode","callMode"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
 $("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
 $("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
 $("rateVal").textContent = settings.rate; $("patienceVal").textContent = settings.patience;
@@ -662,22 +668,42 @@ async function askTutor() {
     return await sample.json(input, { modelTier: "default", effort: "low", cache: false });
   }
   if (!settings.apiKey) { openSheet("settingsSheet"); throw { userMessage: t("errNoKey") } }
+  const haiku = settings.model === "claude-haiku-5-5";
+  const request = {
+    model: settings.model, max_tokens: 4000, system: rules(), messages: recent,
+    output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
+    ...(haiku ? {} : { fallbacks: "default" }),
+  };
+  let res;
+  if (NATIVE?.claudeRequest) {
+    // In the app the request is sent natively, so it keeps going with the screen off.
+    const r = await nativeHttp(settings.apiKey, haiku ? "" : "server-side-fallback-2026-07-01", JSON.stringify(request));
+    if (r.status !== 200) throw { status: r.status || undefined, message: r.body };
+    res = JSON.parse(r.body);
+  } else res = await sdkRequest(request, haiku);
+  if (res.stop_reason === "refusal") throw { userMessage: t("errRefusal") };
+  const text = res.content.find((b) => b.type === "text")?.text;
+  if (!text) throw { userMessage: t("errEmpty") };
+  return JSON.parse(text);
+}
+
+const httpWaiting = {};
+function nativeHttp(apiKey, betas, body) {
+  return new Promise((resolve) => {
+    const id = ++nativeSeq;
+    httpWaiting[id] = resolve;
+    NATIVE.claudeRequest(id, apiKey, betas, body);
+  });
+}
+
+async function sdkRequest(request, haiku) {
   if (!anthropic) {
     const { default: Anthropic } = await import("https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.128.0/+esm");
     anthropic = new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
   } else if (anthropic.apiKey !== settings.apiKey) {
     anthropic = new anthropic.constructor({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
   }
-  const fallback = settings.model === "claude-haiku-5-5" ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
-  const res = await anthropic.beta.messages.create({
-    model: settings.model, max_tokens: 4000, system: rules(), messages: recent,
-    output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-    ...fallback,
-  });
-  if (res.stop_reason === "refusal") throw { userMessage: t("errRefusal") };
-  const text = res.content.find((b) => b.type === "text")?.text;
-  if (!text) throw { userMessage: t("errEmpty") };
-  return JSON.parse(text);
+  return await anthropic.beta.messages.create({ ...request, ...(haiku ? {} : { betas: ["server-side-fallback-2026-07-01"] }) });
 }
 
 function errorText(e) {
@@ -716,6 +742,7 @@ window.__fluentNative = {
       else if (e.event === "end") { delete nativeRecs[e.id]; r.onend?.() }
     } else if (e.type === "tts") { ttsWaiting[e.id]?.(); delete ttsWaiting[e.id] }
     else if (e.type === "voices") fillVoices();
+    else if (e.type === "http") { httpWaiting[e.id]?.(e); delete httpWaiting[e.id] }
     else if (e.type === "route") renderRoute(e);
     else if (e.type === "diag") addDiag(e.line);
     else if (e.type === "stalled") say("sayMicStalled");
@@ -778,6 +805,26 @@ function speak(text, lang) {
     synth.speak(u);
   });
 }
+// Short, soft two-note sound: the sentence was received and Claude is thinking.
+let audioCtx = null;
+function chime() {
+  if (!settings.chime) return;
+  if (NATIVE?.playChime) return NATIVE.playChime();
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    [[659.25, 0, 0.11], [880, 0.14, 0.16]].forEach(([freq, at, dur]) => {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = "sine"; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + at);
+      gain.gain.linearRampToValueAtTime(0.18, now + at + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + at + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now + at); osc.stop(now + at + dur + 0.02);
+    });
+  } catch {}
+}
+
 // Spoken status messages, in the native language, so nothing needs to be read on screen while driving.
 const say = (key) => speak(tn(key), NATIVES[settings.native].voice);
 
@@ -963,7 +1010,7 @@ function complete(s) {
     if (endsWithEndWord(text)) text = dropLastWords(text, words(settings.endWord).length);
     else if (s.alts.at(-1)?.some(endsWithEndWord)) text = dropLastWords(text, 1);
   }
-  if (text) send(text, alts);
+  if (text) { chime(); send(text, alts) }
   else if (settings.handsFree && !micBlocked) {
     // Only the end word, or nothing usable: nothing to send, keep listening.
     if (NATIVE) addDiag(t("emptyIgnored"));

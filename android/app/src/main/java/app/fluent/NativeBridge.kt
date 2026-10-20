@@ -8,6 +8,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.media.AudioTrack
 import android.media.AudioManager
 import android.media.MediaRecorder
 import android.os.Build
@@ -15,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -24,6 +26,8 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 
 /**
@@ -567,6 +571,90 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
         }
     }
 
+    // ---------- requests to Claude ----------
+    // Sent from here rather than from the page: with the screen off, Android puts the page on hold and its
+    // requests wait until the screen comes back on. The answer goes back to the page as an "http" event.
+
+    @JavascriptInterface
+    fun claudeRequest(id: Int, apiKey: String, betas: String, body: String) {
+        val screenOn = activity.getSystemService(PowerManager::class.java).isInteractive
+        diag("Requête à Claude envoyée (écran ${if (screenOn) "allumé" else "éteint"})")
+        Thread {
+            val started = System.currentTimeMillis()
+            val event = JSONObject().put("type", "http").put("id", id)
+            try {
+                val conn = URL("https://api.anthropic.com/v1/messages").openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 120_000
+                conn.doOutput = true
+                conn.setRequestProperty("content-type", "application/json")
+                conn.setRequestProperty("x-api-key", apiKey)
+                conn.setRequestProperty("anthropic-version", "2023-06-01")
+                if (betas.isNotBlank()) conn.setRequestProperty("anthropic-beta", betas)
+                conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                val status = conn.responseCode
+                val stream = if (status in 200..299) conn.inputStream else conn.errorStream
+                val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+                conn.disconnect()
+                event.put("status", status).put("body", text)
+            } catch (e: Exception) {
+                event.put("status", 0).put("body", e.message ?: "network error")
+            }
+            val secs = "%.1f".format((System.currentTimeMillis() - started) / 1000.0)
+            val on = activity.getSystemService(PowerManager::class.java).isInteractive
+            diag("Réponse de Claude reçue en $secs s, statut ${event.optInt("status")} (écran ${if (on) "allumé" else "éteint"})")
+            emit(event)
+        }.start()
+    }
+
+    // ---------- confirmation sound ----------
+    // Two short, soft notes (E5 then A5) with a gentle fade, played on the same channel as Claude's voice.
+    private val chime: ShortArray by lazy {
+        val rate = CHIME_RATE
+        val notes = listOf(659.25 to 0.11, 880.0 to 0.16)
+        val gap = (rate * 0.03).toInt()
+        val out = ArrayList<Short>()
+        for ((freq, dur) in notes) {
+            val n = (rate * dur).toInt()
+            for (i in 0 until n) {
+                val t = i.toDouble() / rate
+                val attack = (i / (rate * 0.008)).coerceAtMost(1.0)  // 8 ms fade in
+                val decay = Math.exp(-t * 18)                          // soft bell-like fade out
+                val v = Math.sin(2 * Math.PI * freq * t) * attack * decay * 0.22
+                out.add((v * Short.MAX_VALUE).toInt().toShort())
+            }
+            repeat(gap) { out.add(0) }
+        }
+        out.toShortArray()
+    }
+
+    @JavascriptInterface
+    fun playChime() = main.post {
+        try {
+            val data = chime
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(if (routedToBluetooth) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder().setSampleRate(CHIME_RATE).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
+                )
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setBufferSizeInBytes(data.size * 2)
+                .build()
+            track.write(data, 0, data.size)
+            track.play()
+            main.postDelayed({ try { track.release() } catch (e: Exception) {} }, 1000)
+        } catch (e: Exception) {
+            diag("Son de confirmation impossible : ${e.message}")
+        }
+    }
+
     // ---------- conversation state and audio routing ----------
 
     @JavascriptInterface
@@ -694,6 +782,7 @@ class NativeBridge(private val activity: MainActivity, private val web: WebView)
 
     companion object {
         private const val STREAM_RATE = 16000
+        private const val CHIME_RATE = 24000
         // An Android pipe holds about 64 KB (2 s of audio): more than that sent means the recognizer is reading.
         private const val PIPE_BYTES = 70_000L
         private const val WATCHDOG_MS = 4000L
