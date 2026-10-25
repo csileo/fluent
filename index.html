@@ -41,7 +41,13 @@ header { display: flex; align-items: center; gap: 12px; padding-block: 14px 10px
 .brand { font: 800 1.6rem/1 var(--font-display); letter-spacing: -0.02em; margin: 0 }
 .brand span { background: linear-gradient(transparent 58%, var(--mark) 58% 90%, transparent 90%); padding-inline: 2px }
 .status { font-size: .8rem; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: .9rem; display: inline-flex; gap: 6px; align-items: center }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: .9rem; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap }
+@media (max-width: 480px) {
+  header { gap: 6px }
+  header .status { display: none }
+  header .brand { flex: 1 }
+  .icon-btn { padding: 6px 9px; font-size: .84rem }
+}
 .icon-btn .count { background: var(--mark); color: var(--mark-ink); border-radius: 999px; padding: 0 7px; font-weight: 700; font-size: .78rem; font-variant-numeric: tabular-nums }
 
 #log { flex: 1; overflow-y: auto; padding-block: 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0 }
@@ -60,6 +66,7 @@ header { display: flex; align-items: center; gap: 12px; padding-block: 14px 10px
 .fix mark { background: var(--mark); color: var(--mark-ink); padding: 0 3px; border-radius: 3px }
 .fix .why { display: block; color: var(--muted); margin-top: 4px }
 .replay { align-self: flex-start; border: 0; background: none; color: var(--muted); font-size: .8rem; padding: 0 2px; text-decoration: underline; text-underline-offset: 3px }
+.empty-chat { align-self: center; text-align: center; color: var(--muted); max-width: 32ch; margin: auto 0 }
 .example-tag { align-self: center; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px }
 .notice { align-self: stretch; font-size: .9rem; border-left: 3px solid var(--danger); background: var(--surface); padding: 8px 12px; border-radius: 6px }
 
@@ -92,6 +99,12 @@ form.typed button { border: 0; background: var(--ink); color: var(--paper); bord
 .field select, .field input[type=text], .field input[type=password] { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 10px; width: 100% }
 .mode { font-size: .85rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px }
 .mode b { color: var(--accent) }
+.convs { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px }
+.convs li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center }
+.convs li.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent) }
+.convs .open { flex: 1; min-width: 0; text-align: left; border: 0; background: none; padding: 0; display: grid; gap: 2px }
+.convs .open b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.convs .open small { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums }
 .notes { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
 .notes li { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: .92rem }
 .notes s { color: var(--muted) }
@@ -125,6 +138,7 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
   <header>
     <h1 class="brand"><span>Fluent</span></h1>
     <div class="status" id="status" aria-live="polite"></div>
+    <button class="icon-btn" id="openConvs" type="button" data-i="convsBtn">Discussions</button>
     <button class="icon-btn" id="openNotes" type="button" data-i-aria="notesTitle"><span data-i="notesBtn">Carnet</span> <span class="count" id="noteCount">0</span></button>
     <button class="icon-btn" id="openSettings" type="button" data-i="settings">Réglages</button>
   </header>
@@ -160,6 +174,14 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
       <button class="btn danger" id="clearNotes" type="button" data-i="clearNotes">Vider le carnet</button>
     </div>
     <p class="empty" id="clearConfirm" hidden><span data-i="clearAsk">Vider le carnet ?</span> <button class="btn danger" id="clearYes" type="button" data-i="clearYes">Oui, vider</button> <button class="btn" id="clearNo" type="button" data-i="cancel">Annuler</button></p>
+  </div>
+</div>
+
+<div class="sheet" id="convSheet" hidden>
+  <div role="dialog" aria-modal="true" aria-labelledby="convTitle">
+    <div class="sheet-head"><h2 id="convTitle" data-i="convsTitle">Discussions</h2><button class="btn" data-close type="button" data-i="close">Fermer</button></div>
+    <div class="row"><button class="btn" id="newConv" type="button" data-i="newChat">Nouvelle discussion</button></div>
+    <ul class="convs" id="convList"></ul>
   </div>
 </div>
 
@@ -258,10 +280,17 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
       <label class="switch"><input type="checkbox" id="nativeExplain" checked> <span data-i="nativeExplain"></span></label>
     </div>
     <div class="field">
-      <label for="prompt" data-i="promptLabel">Instructions pour Claude</label>
+      <label for="promptSel" data-i="promptLabel">Instructions pour Claude</label>
+      <select id="promptSel"></select>
+      <input id="promptName" type="text" data-i-ph="promptNamePh">
       <textarea id="prompt" rows="16" spellcheck="false"></textarea>
+      <label class="switch"><input type="checkbox" id="promptCorrections"> <span data-i="promptCorrections"></span></label>
       <small data-i="promptHelp"></small>
-      <div class="row"><button class="btn" id="promptReset" type="button" data-i="promptReset">Rétablir</button></div>
+      <div class="row">
+        <button class="btn" id="promptNew" type="button" data-i="promptNew">Nouveau prompt</button>
+        <button class="btn" id="promptReset" type="button" data-i="promptReset">Rétablir</button>
+        <button class="btn danger" id="promptDelete" type="button" data-i="promptDelete">Supprimer</button>
+      </div>
     </div>
     <div class="row"><button class="btn" id="newChat" type="button" data-i="newChat">Nouvelle conversation</button></div>
   </div>
@@ -311,12 +340,12 @@ const I18N = {
     carMode: "Mode voiture", carModeLabel: "Grand affichage, réponses courtes, écoute prolongée",
     carModeHelp: "L'écran reste allumé pendant la conversation. Commandes à la voix : demandez de répéter, de parler plus lentement ou plus vite, de changer de sujet ou de faire une pause.",
     corrections: "Corrections", nativeExplain: "Explications dans ma langue maternelle (sinon dans la langue pratiquée)",
-    newChat: "Nouvelle conversation", example: "Exemple", correction: "Correction", understood: "Compris : ", replay: "Réécouter",
+    newChat: "Nouvelle discussion", example: "Exemple", correction: "Correction", understood: "Compris : ", replay: "Réécouter",
     listenEnd: "Parlez, prenez votre temps. Dites « {w} » pour terminer.", listenSilence: "Parlez. J'envoie après un court silence, ou touchez le micro.",
     heardNothing: "Je n'ai rien entendu. Touchez le micro pour parler.", interruptHint: "Touchez le micro pour couper la parole.",
     pausedHint: "En pause. Touchez le micro pour reprendre.", idlePaused: "Écoute en pause faute de parole. Touchez le micro pour reprendre.",
     retryHint: "Touchez le micro pour réessayer.", answerBelow: "Répondez dans le champ ci-dessous.", yourTurn: "À vous ! Touchez le micro pour répondre.",
-    newChatHint: "Nouvelle conversation. Appuyez sur le micro pour commencer.",
+    newChatHint: "Nouvelle discussion. Touchez le micro pour commencer.",
     netLostHint: "Réseau perdu, je réessaie…", connHint: "Connexion difficile, je réessaie…",
     noNetNotice: "Pas de réseau pour la reconnaissance vocale. Touchez le micro quand la connexion revient.",
     noSRHint: "Appuyez sur le micro pour commencer (ou écrivez ci-dessous : la reconnaissance vocale demande Chrome ou Edge).",
@@ -333,7 +362,7 @@ const I18N = {
     micHelp: "Fluent enregistre lui-même le micro utilisé pour les appels (celui de la voiture en Bluetooth) et le transmet à la reconnaissance vocale. Sans voiture, c'est le micro du téléphone.",
     diag: "Diagnostic", copyDiag: "Copier le diagnostic", diagEmpty: "Lancez une conversation : les étapes du micro s'affichent ici.",
     promptLabel: "Instructions pour Claude",
-    promptHelp: "Décrivez comment Claude doit discuter et corriger. Remplacés automatiquement : {langue}, {langue_maternelle}, {niveau}, {sujet}, {longueur_réponse}, {langue_explications}. Le format technique (commandes vocales, mot de fin, relevé des fautes) est ajouté par l'appli.",
+    promptHelp: "Choisissez le prompt actif, modifiez-le ou créez-en d'autres. Les deux prompts d'origine peuvent toujours être rétablis. Remplacés automatiquement : {langue}, {langue_maternelle}, {niveau}, {sujet}, {longueur_réponse}, {langue_explications}. Vous pouvez aussi tout demander à voix haute : créer un prompt, changer de prompt, un réglage ou de discussion.",
     promptReset: "Rétablir le texte d'origine", noted: "Noté : ", resumeHint: "Touchez le micro pour reprendre la conversation.",
     callMode: "Mode appel Bluetooth", callModeLabel: "Utiliser le micro et les haut-parleurs de la voiture, comme pour un appel",
     callModeHelp: "Pendant la conversation, le téléphone passe le Bluetooth en mode appel. Le son est de qualité téléphone.",
@@ -341,6 +370,11 @@ const I18N = {
     // spoken messages (native language)
     sayNetLost: "Réseau perdu, je réessaie.", sayNoNet: "Pas de réseau. Je me mets en pause.", sayIdle: "Je me mets en pause.",
     emptyIgnored: "Phrase vide ignorée, écoute relancée",
+    convsBtn: "Discussions", convsTitle: "Discussions", untitled: "Discussion sans titre", firstConvTitle: "Première conversation",
+    messagesCount: "{n} messages", deleteConv: "Supprimer", confirmDelete: "Confirmer ?",
+    promptNew: "Nouveau prompt", promptDelete: "Supprimer ce prompt", promptNamePh: "Nom du prompt", promptNewName: "Mon prompt {n}",
+    promptCorrections: "Corriger mes fautes de langue",
+    chatEmpty: "Touchez le micro et parlez : Claude vous répond à voix haute.", settingChanged: "Réglage modifié : {k} → {v}",
     chimeLab: "Son de confirmation", chimeLabel: "Un son court quand votre phrase est reçue et que Claude réfléchit",
     sayRetry: "Connexion difficile, je réessaie.", sayMicStalled: "Le micro ne répond pas, je le relance.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
   },
@@ -391,13 +425,18 @@ const I18N = {
     micHelp: "Fluent records the microphone used for calls itself (the car's over Bluetooth) and passes it to speech recognition. Without a car, it's the phone's microphone.",
     diag: "Diagnostics", copyDiag: "Copy diagnostics", diagEmpty: "Start a conversation: the microphone steps show up here.",
     promptLabel: "Instructions for Claude",
-    promptHelp: "Describe how Claude should talk and correct you. Filled in automatically: {language}, {native}, {level}, {topic}, {reply_length}, {explanation_language}. The app adds the technical part (voice commands, end word, mistake tracking).",
+    promptHelp: "Pick the active prompt, edit it or create others. The two original prompts can always be restored. Filled in automatically: {language}, {native}, {level}, {topic}, {reply_length}, {explanation_language}. You can also ask for anything out loud: create or switch prompts, change a setting or a conversation.",
     promptReset: "Restore the original text", noted: "Noted: ", resumeHint: "Tap the mic to resume the conversation.",
     callMode: "Bluetooth call mode", callModeLabel: "Use the car's microphone and speakers, as for a phone call",
     callModeHelp: "During the conversation, the phone switches Bluetooth to call mode. Sound is phone-call quality.",
     routeCar: "Audio: {name} (Bluetooth)", routePhone: "Audio: phone",
     sayNetLost: "Network lost, retrying.", sayNoNet: "No network. Pausing.", sayIdle: "Pausing.",
     emptyIgnored: "Empty sentence ignored, listening again",
+    convsBtn: "Chats", convsTitle: "Conversations", untitled: "Untitled conversation", firstConvTitle: "First conversation",
+    messagesCount: "{n} messages", deleteConv: "Delete", confirmDelete: "Confirm?",
+    promptNew: "New prompt", promptDelete: "Delete this prompt", promptNamePh: "Prompt name", promptNewName: "My prompt {n}",
+    promptCorrections: "Correct my language mistakes",
+    chatEmpty: "Tap the mic and talk: Claude answers out loud.", settingChanged: "Setting changed: {k} → {v}",
     chimeLab: "Confirmation sound", chimeLabel: "A short sound when your sentence is received and Claude is thinking",
     sayRetry: "Poor connection, retrying.", sayMicStalled: "The microphone isn't responding, restarting it.", sayFail: "I couldn't reach Claude. Please say that again.",
   },
@@ -407,13 +446,16 @@ const NATIVES = {
   fr: { label: { fr: "Français", en: "French" }, name: "French", voice: "fr-FR" },
   en: { label: { fr: "Anglais", en: "English" }, name: "English", voice: "en-US" },
 };
-const fill = (str, v) => str.replace(/\{(\w+)\}/g, (_, k) => v?.[k] ?? "");
+const fill = (str, v) => str.replace(/\{(\w+)\}/g, (m, k) => (v && k in v ? v[k] : m));
 const t = (k, v) => fill(I18N[settings.ui]?.[k] ?? I18N.fr[k] ?? k, v);   // on screen
 const tn = (k, v) => fill(I18N[settings.native]?.[k] ?? I18N.en[k] ?? k, v);  // spoken, in the native language
 
 // ---------- languages ----------
 // name: how the tutor prompt names the language; end: default end word; tip: spoken before a correction.
 const LANGS = {
+  "fr-FR": { ex: ["Ah, tu veux dire que tu *es* allé au cinéma ?", "Tu *es* allé au cinéma samedi ? Sympa…", "Petite chose : on dit « je *suis* allé », pas « j'ai allé ».", "Au fait, tu dis souvent … — on dit …"],
+    label: { fr: "Français", en: "French" }, name: "French", end: "terminé", tip: "Petite remarque : on peut dire",
+    example: ["Salut ! Qu'est-ce que tu as fait ce week-end ?", "J'ai allé au cinéma avec ma sœur.", "J'ai allé", "Je suis allé", { fr: "« Aller » se conjugue avec « être » au passé composé.", en: "\"Aller\" takes \"être\" in the passé composé." }, "Super ! Vous avez vu quel film ?"] },
   "en-US": { ex: ["Oh, you mean you *went* to the cinema?", "You *went* there last week? Nice…", "Small thing: we'd say 'I *went*', not 'I have went'.", "By the way, you often say … — it's …"],
     label: { fr: "Anglais (américain)", en: "English (American)" }, name: "American English", end: "over", tip: "Quick tip: you can say",
     example: ["Hi! What did you do last weekend?", "I have went to the cinema with my sister.", "I have went", "I went", { fr: "Pour une action terminée à un moment précis, on utilise le prétérit.", en: "For a finished action at a specific time, use the simple past." }, "Nice! What movie did you see, and would you recommend it?"] },
@@ -451,7 +493,11 @@ const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
   rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true, micMode: "stream", chime: true,
   ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
+  prompts: [], promptOverrides: {}, promptId: "learning",
 }, stored);
+// Before several prompts existed, an edited prompt was kept in settings.prompt: it becomes the edited language-practice prompt.
+if (settings.prompt) { settings.promptOverrides = { ...settings.promptOverrides, learning: settings.prompt } }
+delete settings.prompt;
 delete settings.accent; delete settings.frExplain;
 if (!I18N[settings.ui]) settings.ui = "en";
 if (!NATIVES[settings.native]) settings.native = "fr";
@@ -586,32 +632,129 @@ HOW TO CORRECT
 - Then carry on the conversation naturally.
 - Explanations shown on screen: one short sentence in {explanation_language}.`,
 };
-function defaultPrompt() {
-  const ex = L().ex;
-  return PROMPT_TEMPLATES[settings.ui].replace(/\[\[EX(\d)\]\]/g, (_, n) => ex[n - 1]);
+// Second built-in prompt: a spoken conversation like a written chat with Claude, no language teaching.
+const CHAT_TEMPLATES = {
+  fr: `Tu es Claude, et nous discutons à l'oral, comme je le ferais par écrit avec toi : je peux te poser des questions, réfléchir avec toi, te demander des explications, des idées ou ton avis sur n'importe quel sujet. Parle toujours en {langue}.
+Sujet de départ : {sujet}.
+
+COMMENT RÉPONDRE
+- Réponds comme dans une vraie conversation : naturel, direct et chaleureux, sans formules creuses.
+- Longueur : {longueur_réponse}. Si le sujet demande plus de détails, donne l'essentiel puis propose d'approfondir.
+- Pas de listes, de titres ni de mise en forme : tout est lu à voix haute. Pour énumérer, fais-le en phrases (« d'abord…, ensuite… »).
+- Pose une question seulement quand elle m'aide ou fait vraiment avancer la discussion.
+- Mon texte vient d'une reconnaissance vocale : si tu n'es pas sûr d'avoir compris, dis-le simplement et demande-moi de préciser.
+- Sois honnête : si tu ne sais pas, ou si une information a pu changer depuis, dis-le.`,
+  en: `You are Claude, and we're talking out loud, the way I would chat with you in writing: I can ask you questions, think things through with you, or ask for explanations, ideas or your opinion on any subject. Always speak {language}.
+Starting topic: {topic}.
+
+HOW TO ANSWER
+- Answer like in a real conversation: natural, direct and warm, without filler.
+- Length: {reply_length}. If the subject needs more detail, give the essentials and offer to go deeper.
+- No lists, headings or formatting: everything is read aloud. To list things, do it in sentences ("first…, then…").
+- Ask a question only when it helps me or really moves the conversation forward.
+- My text comes from speech recognition: if you're not sure you understood, say so simply and ask me to rephrase.
+- Be honest: if you don't know, or if something may have changed since, say so.`,
+};
+// Built-in prompts can be edited (the edit is kept apart) and restored; custom prompts live in settings.prompts.
+const BUILTIN_PROMPTS = {
+  learning: { name: { fr: "Apprentissage de la langue", en: "Language practice" }, corrections: true,
+    text: () => PROMPT_TEMPLATES[settings.ui].replace(/\[\[EX(\d)\]\]/g, (_, n) => L().ex[n - 1]) },
+  chat: { name: { fr: "Discussion libre", en: "Free conversation" }, corrections: false,
+    text: () => CHAT_TEMPLATES[settings.ui] },
+};
+function allPrompts() {
+  return [
+    ...Object.entries(BUILTIN_PROMPTS).map(([id, b]) => ({
+      id, builtin: true, name: b.name[settings.ui], corrections: b.corrections,
+      text: settings.promptOverrides[id] || b.text(), edited: !!settings.promptOverrides[id],
+    })),
+    ...settings.prompts.map((p) => ({ ...p, builtin: false })),
+  ];
 }
-const currentPrompt = () => settings.prompt || defaultPrompt();
+const activePrompt = () => allPrompts().find((p) => p.id === settings.promptId) || allPrompts()[0];
+const currentPrompt = () => activePrompt().text;
+function findPrompt(target) {
+  const n = norm(target || "");
+  if (!n) return activePrompt();
+  const list = allPrompts();
+  return list.find((p) => p.id === target) || list.find((p) => norm(p.name) === n) || list.find((p) => norm(p.name).includes(n) || n.includes(norm(p.name)));
+}
 function promptVars() {
   const fr = settings.ui === "fr";
   const lang = fr ? L().label.fr.toLowerCase() : L().name;
   const native = fr ? NATIVES[settings.native].label.fr.toLowerCase() : NATIVES[settings.native].name;
   const topic = settings.topic || (fr ? "libre : vie quotidienne, travail, projets, opinions, histoires" : "anything: daily life, work, plans, opinions, stories");
-  const length = settings.carMode
-    ? (fr ? "1 ou 2 phrases courtes, faciles à suivre à l'oreille, car je conduis" : "1 or 2 short sentences, easy to follow by ear, because I'm driving")
-    : (fr ? "1 à 3 phrases courtes" : "1 to 3 short sentences");
+  const chat = !activePrompt().corrections;
+  const length = chat
+    ? (settings.carMode
+      ? (fr ? "2 à 4 phrases courtes, faciles à suivre à l'oreille, car je conduis" : "2 to 4 short sentences, easy to follow by ear, because I'm driving")
+      : (fr ? "quelques phrases, comme à l'oral ; plus long seulement si je le demande" : "a few sentences, as when speaking; longer only if I ask"))
+    : (settings.carMode
+      ? (fr ? "1 ou 2 phrases courtes, faciles à suivre à l'oreille, car je conduis" : "1 or 2 short sentences, easy to follow by ear, because I'm driving")
+      : (fr ? "1 à 3 phrases courtes" : "1 to 3 short sentences"));
   const level = settings.level;
   const expl = settings.nativeExplain ? native : lang;
   return { langue: lang, language: lang, langue_maternelle: native, native, niveau: level, level, sujet: topic, topic,
     "longueur_réponse": length, reply_length: length, langue_explications: expl, explanation_language: expl };
 }
-// The settings textarea shows the default text until the learner changes it.
-function renderPrompt() { if (document.activeElement !== $("prompt")) $("prompt").value = currentPrompt() }
-$("prompt").addEventListener("input", () => {
-  const v = $("prompt").value;
-  settings.prompt = v.trim() && v !== defaultPrompt() ? v : null;
-  saveSettings();
+
+// ---------- prompt settings ----------
+function renderPrompt() {
+  const list = allPrompts(), p = activePrompt();
+  const sel = $("promptSel");
+  sel.innerHTML = "";
+  for (const q of list) sel.add(new Option(q.name + (q.builtin ? (q.edited ? " ✎" : "") : ""), q.id));
+  sel.value = p.id;
+  $("promptName").hidden = p.builtin;
+  if (document.activeElement !== $("promptName")) $("promptName").value = p.builtin ? "" : p.name;
+  if (document.activeElement !== $("prompt")) $("prompt").value = p.text;
+  $("promptCorrections").checked = p.corrections;
+  $("promptCorrections").disabled = p.builtin;
+  $("promptReset").hidden = !p.builtin;
+  $("promptDelete").hidden = p.builtin;
+}
+function savePrompts() { saveSettings(); renderPrompt(); if (!turns.length) renderExample() }
+function selectPrompt(id) {
+  settings.promptId = id;
+  const c = currentConv(); if (c) c.promptId = id;
+  savePrompts(); saveConversation();
+}
+function setPromptText(p, text) {
+  if (p.builtin) {
+    if (text.trim() && text !== BUILTIN_PROMPTS[p.id].text()) settings.promptOverrides[p.id] = text;
+    else delete settings.promptOverrides[p.id];
+  } else {
+    const c = settings.prompts.find((q) => q.id === p.id);
+    if (c) c.text = text;
+  }
+}
+function createPrompt(name, text, corrections, activate) {
+  const n = settings.prompts.length + 1;
+  const p = { id: "p" + Date.now().toString(36), name: (name || "").trim() || t("promptNewName", { n }), text: text || currentPrompt(), corrections: !!corrections };
+  settings.prompts.push(p);
+  if (activate) selectPrompt(p.id); else savePrompts();
+  return p;
+}
+function deletePrompt(p) {
+  if (!p || p.builtin) return false;
+  settings.prompts = settings.prompts.filter((q) => q.id !== p.id);
+  if (settings.promptId === p.id) selectPrompt("learning"); else savePrompts();
+  return true;
+}
+$("promptSel").addEventListener("change", () => selectPrompt($("promptSel").value));
+$("prompt").addEventListener("input", () => { setPromptText(activePrompt(), $("prompt").value); saveSettings() });
+$("promptName").addEventListener("input", () => {
+  const c = settings.prompts.find((q) => q.id === settings.promptId);
+  if (c) { c.name = $("promptName").value; saveSettings(); $("promptSel").selectedOptions[0].textContent = c.name }
 });
-$("promptReset").addEventListener("click", () => { settings.prompt = null; saveSettings(); $("prompt").value = defaultPrompt() });
+$("promptName").addEventListener("change", renderPrompt);
+$("promptCorrections").addEventListener("change", () => {
+  const c = settings.prompts.find((q) => q.id === settings.promptId);
+  if (c) { c.corrections = $("promptCorrections").checked; savePrompts() }
+});
+$("promptNew").addEventListener("click", () => { createPrompt("", currentPrompt(), activePrompt().corrections, true); $("promptName").focus(); $("promptName").select() });
+$("promptReset").addEventListener("click", () => { delete settings.promptOverrides[settings.promptId]; savePrompts() });
+$("promptDelete").addEventListener("click", () => deletePrompt(activePrompt()));
 
 // Small mistakes Claude let go, counted by type, so it can bring up the ones that keep coming back.
 let mistakeCounts = {};
@@ -619,9 +762,13 @@ const tallyText = () => Object.entries(mistakeCounts).filter(([, n]) => n > 0)
   .map(([k, n]) => `- ${k}: ${n} time${n > 1 ? "s" : ""}`).join("\n") || "- none yet";
 
 const ACTIONS = ["none", "repeat", "slower", "faster", "pause", "new_topic"];
+// Settings Claude may change when the user asks out loud (everything but the API key).
+const VOICE_SETTINGS = ["lang", "native", "ui", "level", "topic", "endWord", "rate", "patience", "voice", "handsFree", "carMode", "chime", "nativeExplain", "callMode", "micMode", "model"];
+const APP_ACTIONS = ["none", "new_conversation", "open_conversation", "rename_conversation", "delete_conversation",
+  "create_prompt", "edit_prompt", "rename_prompt", "select_prompt", "reset_prompt", "delete_prompt"];
 const SCHEMA = {
   type: "object", additionalProperties: false,
-  required: ["action", "understood", "mistake", "mistake_type", "original", "corrected", "explanation", "corrected_in_reply", "reply"],
+  required: ["action", "understood", "mistake", "mistake_type", "original", "corrected", "explanation", "corrected_in_reply", "reply", "settings", "app", "conversation_title"],
   properties: {
     action: { type: "string", enum: ACTIONS },
     understood: { type: "string" },
@@ -630,21 +777,64 @@ const SCHEMA = {
     original: { type: "string" }, corrected: { type: "string" }, explanation: { type: "string" },
     corrected_in_reply: { type: "boolean" },
     reply: { type: "string" },
+    settings: { type: "array", items: { type: "object", additionalProperties: false, required: ["key", "value"],
+      properties: { key: { type: "string", enum: VOICE_SETTINGS }, value: { type: "string" } } } },
+    app: { type: "object", additionalProperties: false, required: ["action", "target", "name", "prompt_text", "prompt_corrections", "activate"],
+      properties: {
+        action: { type: "string", enum: APP_ACTIONS }, target: { type: "string" }, name: { type: "string" },
+        prompt_text: { type: "string" }, prompt_corrections: { type: "boolean" }, activate: { type: "boolean" },
+      } },
+    conversation_title: { type: "string" },
   },
 };
 
+// What Claude needs to know to change settings, conversations and prompts on request.
+function controlInfo() {
+  const langs = Object.entries(LANGS).map(([code, l]) => `${code} (${l.name})`).join(", ");
+  const voiceNames = voicesFor(settings.lang).slice(0, 12).map((v) => v.name).join(", ") || "none listed";
+  const cur = (k) => JSON.stringify(settings[k] ?? "");
+  const convList = [...convs].sort((a, b) => b.updated - a.updated).slice(0, 25)
+    .map((c, i) => `${i + 1}. ${c.id === currentId ? "* " : ""}"${c.title || "untitled"}" (${c.log.filter((e) => e.k === "me").length} messages)`).join("\n");
+  const promptList = allPrompts().map((q) => `- ${q.id === settings.promptId ? "* " : ""}"${q.name}"${q.builtin ? " (built-in)" : ""}, corrections ${q.corrections ? "on" : "off"}`).join("\n");
+  return `- App control: the user can change any setting, manage conversations and manage prompts just by asking, in their own words (no fixed commands). Do it only when they clearly ask, and confirm briefly in "reply" what you did. If a request is unclear, ask instead of guessing. After changing the conversation language, write the confirmation in the new language.
+  Use "settings" for setting changes (several at once if asked) and "app" for one action on conversations or prompts.
+  Settings (key: allowed values; current value):
+  - lang: conversation language, used for speech recognition and the voice: ${langs}; current ${cur("lang")}
+  - native: user's native language, for explanations and spoken status messages: fr, en; current ${cur("native")}
+  - ui: interface language: fr, en; current ${cur("ui")}
+  - level: A2, B1, B2, C1; current ${cur("level")}
+  - topic: conversation topic, free text ("" for open); current ${cur("topic")}
+  - endWord: word the user says to finish speaking, "" to send after a silence; current ${cur("endWord")}
+  - rate: voice speed 0.6 to 1.3; current ${cur("rate")}
+  - patience: seconds of silence before sending when there is no end word, 1 to 4; current ${cur("patience")}
+  - voice: one of ${voiceNames}; current ${cur("voice")}
+  - handsFree (listen again after each reply), carMode, chime (sound when a sentence is received), nativeExplain (explanations in the native language), callMode (car microphone and speakers over Bluetooth): true or false
+  - micMode: stream (recommended), stream_ondevice, system; current ${cur("micMode")}
+  - model: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; current ${cur("model")}
+  Conversations (most recent first, * = current):
+${convList}
+  Prompts (* = active):
+${promptList}
+  App actions: new_conversation (starts a new conversation; the current one is kept), open_conversation (target: number or title), rename_conversation (target, or "" for the current one; name), delete_conversation (target), create_prompt (name; prompt_text: complete instructions written in the user's language in the style of the active prompt, using the same {placeholders} when useful; prompt_corrections: whether to correct language mistakes; activate: whether to use it now), edit_prompt (target, or "" for the active one; prompt_text: the complete new text), rename_prompt (target; name), select_prompt (target), reset_prompt (target: a built-in prompt, back to its original text), delete_prompt (target). Unused fields: "" or false.`;
+}
+
 function rules() {
+  const p = activePrompt();
   const visible = fill(currentPrompt(), promptVars());
   const lang = L().name, native = NATIVES[settings.native].name;
-  const end = settings.endWord ? `\n- The learner ends each turn by saying "${settings.endWord}". If that word, or something that sounds like it, is left at the end of a message, ignore it.` : "";
+  const end = settings.endWord ? `\n- The user ends each turn by saying "${settings.endWord}". If that word, or something that sounds like it, is left at the end of a message, ignore it.` : "";
+  const corrections = p.corrections
+    ? `- Small mistakes the user made that you have not corrected yet, by type:
+${tallyText()}`
+    : `- Language corrections are off for this conversation: "mistake" is always "none", the other mistake fields are "" and corrected_in_reply is false.`;
   return `${visible}
 
 ---
-APP INSTRUCTIONS (always follow these; everything above is the learner's own setup and wins on style):
-- Speech recognition: when available, other recognizer hypotheses are listed after the transcript. Use them to work out what the learner meant.${end}
-- Voice commands: if the learner asks you, in ${lang} or in ${native}, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic" and "mistake" to "none". For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", bring up a new subject. Otherwise "action" is "none".
-- Small mistakes the learner made that you have not corrected yet, by type:
-${tallyText()}
+APP INSTRUCTIONS (always follow these; everything above is the user's own setup and wins on style):
+- Speech recognition: when available, other recognizer hypotheses are listed after the transcript. Use them to work out what the user meant.${end}
+- Voice commands: if the user asks you, in ${lang} or in ${native}, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic" and "mistake" to "none". For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", bring up a new subject. Otherwise "action" is "none".
+${controlInfo()}
+${corrections}
 
 Return JSON:
 - action: as above.
@@ -653,15 +843,20 @@ Return JSON:
 - mistake_type: a short English label for that kind of mistake (for example "present perfect for finished past", "article", "preposition", "adjective agreement"). Reuse the exact labels from the list above when it is the same kind. "" if none.
 - original: the wrong fragment (a few words), corrected: its natural correction, explanation: one short sentence on the rule as described above. All "" if none.
 - corrected_in_reply: true only if your reply corrects that mistake out loud.
-- reply: what you say, read aloud by a speech synthesizer. Plain spoken text: no markdown, lists or emoji, except *asterisks* around the word you stress when you correct.`;
+- reply: what you say, read aloud by a speech synthesizer. Plain spoken text: no markdown, lists or emoji, except *asterisks* around the word you stress when you correct.
+- settings: the setting changes the user asked for, [] otherwise.
+- app: {"action": "none", ...} unless the user asked for a conversation or prompt action.
+- conversation_title: a short title (2 to 5 words, in the user's language) for this conversation when it has none yet or the user asks to rename it; "" otherwise.`;
 }
 
-const OPENING = "(The learner just opened the app. Greet them briefly and start the conversation about the topic in a natural, engaging way. action is \"none\", understood is \"\" and mistake is \"none\".)";
+const OPENING = "(A new conversation just started. Greet the user briefly and start it in a natural way that fits the setup above. action is \"none\", understood is \"\", mistake is \"none\", settings is [] and app action is \"none\".)";
 let turns = [];  // {role, content} — what the tutor and learner actually said
 
+const HISTORY_TURNS = 120;
 async function askTutor() {
   await ready;
-  const recent = turns.slice(-30);
+  // The whole recent history goes with every request, so Claude remembers the conversation, also after a restart.
+  const recent = turns.slice(-HISTORY_TURNS);
   if (recent[0]?.role !== "user") recent.shift();
   if (sample) {
     const input = [{ role: "user", content: rules() + "\n\nReply with only the JSON object. The conversation follows." }, ...recent];
@@ -1053,14 +1248,92 @@ function showInterim(text) {
 }
 function clearInterim() { interimEl?.remove(); interimEl = null }
 
-// ---------- saved conversation ----------
-// turns: what Claude is sent; log: what the screen shows. Both survive closing the app.
+// ---------- conversations ----------
+// Several conversations are kept, like in the Claude app. For the current one, turns (what Claude is sent)
+// and log (what the screen shows) are worked on directly and written back by saveConversation().
 let log = [];
-function saveConversation() {
-  turns = turns.slice(-60);
-  log = log.slice(-150);
-  store.set("conversation", { turns, log, counts: mistakeCounts, lastReply });
+let convs = [];
+let currentId = null;
+const MAX_CONVS = 60;
+const currentConv = () => convs.find((c) => c.id === currentId);
+function newConvObj(title = "") {
+  return { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title, autoTitle: !title,
+    created: Date.now(), updated: Date.now(), promptId: settings.promptId, turns: [], log: [], counts: {}, lastReply: "" };
 }
+function storeConvs() { store.set("conversations", { list: convs, currentId }) }
+function saveConversation() {
+  const c = currentConv();
+  if (!c) return;
+  turns = turns.slice(-400);
+  log = log.slice(-300);
+  Object.assign(c, { turns, log, counts: mistakeCounts, lastReply, updated: Date.now() });
+  storeConvs();
+}
+function loadConv(id) {
+  const c = convs.find((x) => x.id === id) || convs[0];
+  currentId = c.id;
+  turns = c.turns; log = c.log; mistakeCounts = c.counts || {}; lastReply = c.lastReply || "";
+  if (c.promptId && allPrompts().some((p) => p.id === c.promptId) && c.promptId !== settings.promptId) {
+    settings.promptId = c.promptId; saveSettings(); renderPrompt();
+  }
+  started = log.length > 0;
+  if (log.length) renderLog(); else renderExample();
+  storeConvs();
+  renderConvs();
+}
+function stopEverything() { synth?.cancel(); stopListening(true) }
+// Starts a new conversation and keeps the current one (an empty current one is simply reused).
+function newConversation() {
+  stopEverything();
+  const c = currentConv();
+  if (!c || c.log.length) {
+    const fresh = newConvObj();
+    convs.unshift(fresh);
+    if (convs.length > MAX_CONVS) convs = convs.sort((a, b) => b.updated - a.updated).slice(0, MAX_CONVS);
+    currentId = fresh.id;
+  } else c.promptId = settings.promptId;
+  loadConv(currentId);
+  setState("idle", t("newChatHint"));
+}
+function openConversation(id) {
+  stopEverything();
+  loadConv(id);
+  setState("idle", log.length ? t("resumeHint") : t("startHint"));
+}
+function deleteConversation(id) {
+  convs = convs.filter((c) => c.id !== id);
+  if (!convs.length) convs.push(newConvObj());
+  if (id === currentId) loadConv([...convs].sort((a, b) => b.updated - a.updated)[0].id); else { storeConvs(); renderConvs() }
+}
+function renameConversation(c, title) { if (c && title.trim()) { c.title = title.trim(); c.autoTitle = false; storeConvs(); renderConvs() } }
+function findConv(target) {
+  const sorted = [...convs].sort((a, b) => b.updated - a.updated);
+  const n = norm(target || "");
+  if (!n) return currentConv();
+  const num = parseInt(n, 10);
+  if (String(num) === n && sorted[num - 1]) return sorted[num - 1];
+  return convs.find((c) => norm(c.title) === n) || convs.find((c) => c.title && (norm(c.title).includes(n) || n.includes(norm(c.title))));
+}
+function renderConvs() {
+  const ul = $("convList");
+  ul.innerHTML = "";
+  for (const c of [...convs].sort((a, b) => b.updated - a.updated)) {
+    const li = el("li", c.id === currentId ? "current" : "");
+    const open = el("button", "open"); open.type = "button";
+    const count = c.log.filter((e) => e.k === "me").length;
+    const date = new Date(c.updated).toLocaleDateString(settings.ui === "fr" ? "fr-FR" : "en-GB", { day: "numeric", month: "short" });
+    open.append(el("b", null, c.title || t("untitled")), el("small", null, `${date} · ${t("messagesCount", { n: count })}`));
+    open.onclick = () => { openConversation(c.id); closeSheets() };
+    const del = el("button", "btn danger", t("deleteConv")); del.type = "button";
+    del.onclick = () => {
+      if (del.dataset.confirm) deleteConversation(c.id);
+      else { del.dataset.confirm = "1"; del.textContent = t("confirmDelete") }
+    };
+    li.append(open, del);
+    ul.append(li);
+  }
+}
+
 // Claude marks the stressed word of a correction with *asterisks*: highlighted on screen, plain when spoken.
 const spoken = (text) => text.replace(/\*([^*]+)\*/g, "$1");
 function richText(node, text) {
@@ -1181,6 +1454,20 @@ async function send(text, alts) {
     else mistakeCounts[type] = (mistakeCounts[type] || 0) + 1;
   }
   if (fix) saveNote(fix);
+  // Title: Claude's suggestion, else the first words of the first sentence.
+  const conv = currentConv();
+  const title = (data.conversation_title || "").trim();
+  if (conv && title && (conv.autoTitle || !conv.title)) { conv.title = title; conv.autoTitle = false }
+  else if (conv && !conv.title && meEntry) conv.title = text.split(/\s+/).slice(0, 6).join(" ");
+  // Settings asked for out loud: applied now (so the reply already uses the new voice or speed), except
+  // the ones that restart the microphone, applied once the reply has been spoken.
+  const deferred = [];
+  // The greeting that opens a conversation never changes settings nor triggers actions (no loops).
+  if (opening) { data.settings = []; data.app = null }
+  for (const ch of Array.isArray(data.settings) ? data.settings : []) {
+    if (["callMode", "micMode"].includes(ch.key)) deferred.push(ch); else applySetting(ch.key, ch.value);
+  }
+  const after = data.app && data.app.action && data.app.action !== "none" ? runAppAction(data.app) : null;
   if (data.reply) {
     addEntry({ k: "tutor", reply: data.reply, fix: data.corrected_in_reply ? fix : null });
     lastReply = data.reply;
@@ -1189,8 +1476,68 @@ async function send(text, alts) {
 
   setState("speaking", t("interruptHint"));
   await speak(spoken(data.reply));
+  for (const ch of deferred) applySetting(ch.key, ch.value);
   if (action === "pause") { setActive(false); setState("idle", t("pausedHint")); return }
+  if (after) return after();
   afterSpeaking();
+}
+
+// ---------- changes asked for out loud ----------
+const BOOL_SETTINGS = ["handsFree", "carMode", "chime", "nativeExplain", "callMode"];
+function applySetting(key, raw) {
+  if (!VOICE_SETTINGS.includes(key)) return false;
+  let v = String(raw ?? "").trim();
+  if (BOOL_SETTINGS.includes(key)) v = /^(true|1|yes|oui|on|vrai)$/i.test(v);
+  else if (key === "rate") { v = Math.min(1.3, Math.max(0.6, Number(v) || settings.rate)) }
+  else if (key === "patience") { v = Math.min(4, Math.max(1, Number(v) || settings.patience)) }
+  else if (key === "lang") {
+    const code = Object.keys(LANGS).find((c) => c.toLowerCase() === v.toLowerCase())
+      || Object.keys(LANGS).find((c) => c.slice(0, 2) === v.slice(0, 2).toLowerCase());
+    if (!code) return false;
+    v = code;
+  }
+  else if (key === "native" || key === "ui") { v = v.slice(0, 2).toLowerCase(); if (!(key === "ui" ? I18N : NATIVES)[v]) return false }
+  else if (key === "level") { v = v.toUpperCase(); if (!["A2", "B1", "B2", "C1"].includes(v)) return false }
+  else if (key === "micMode") { if (!["stream", "stream_ondevice", "system"].includes(v)) return false }
+  else if (key === "model") { if (![...$("model").options].some((o) => o.value === v)) return false }
+  else if (key === "voice") { if (!voices.some((x) => x.name === v)) return false }
+  if (settings[key] === v) return false;
+  settings[key] = v;
+  const control = $(key);
+  if (control) { if (control.type === "checkbox") control.checked = v; else control.value = v }
+  if (key === "rate") $("rateVal").textContent = v;
+  if (key === "patience") $("patienceVal").textContent = v;
+  saveSettings();
+  onSettingChange(key);
+  addDiag(t("settingChanged", { k: key, v: String(v) }));
+  return true;
+}
+// Conversation and prompt actions; returns what to do once the reply has been spoken, if anything.
+function runAppAction(app) {
+  const target = app.target || "";
+  const listenAgain = () => { if (settings.handsFree && !micBlocked) listen(); else setState("idle", t("yourTurn")) };
+  switch (app.action) {
+    case "new_conversation": return () => { newConversation(); start() };
+    case "open_conversation": { const c = findConv(target); return c ? () => { openConversation(c.id); listenAgain() } : null }
+    case "rename_conversation": renameConversation(findConv(target), app.name || ""); return null;
+    case "delete_conversation": {
+      const c = findConv(target);
+      if (!c) return null;
+      if (c.id !== currentId) { deleteConversation(c.id); return null }
+      return () => { deleteConversation(c.id); setState("idle", t("startHint")); listenAgain() };
+    }
+    case "create_prompt": createPrompt(app.name, app.prompt_text, app.prompt_corrections, app.activate); return null;
+    case "edit_prompt": { const p = findPrompt(target); if (p && app.prompt_text) { setPromptText(p, app.prompt_text); savePrompts() } return null }
+    case "rename_prompt": {
+      const p = findPrompt(target), c = p && settings.prompts.find((q) => q.id === p.id);
+      if (c && app.name) { c.name = app.name; savePrompts() }
+      return null;
+    }
+    case "select_prompt": { const p = findPrompt(target); if (p) selectPrompt(p.id); return null }
+    case "reset_prompt": { const p = findPrompt(target); if (p?.builtin) { delete settings.promptOverrides[p.id]; savePrompts() } return null }
+    case "delete_prompt": deletePrompt(findPrompt(target)); return null;
+  }
+  return null;
 }
 
 function afterSpeaking() {
@@ -1234,13 +1581,8 @@ $("typed").addEventListener("submit", (e) => {
   synth?.cancel(); stopListening(true);
   send(v);
 });
-$("newChat").addEventListener("click", () => {
-  synth?.cancel(); stopListening(true); setActive(false);
-  turns = []; log = []; mistakeCounts = {}; lastReply = "";
-  store.set("conversation", null);
-  $("log").innerHTML = ""; started = true; closeSheets();
-  setState("idle", t("newChatHint"));
-});
+$("newChat").addEventListener("click", () => { newConversation(); closeSheets() });
+$("newConv").addEventListener("click", () => { newConversation(); closeSheets() });
 
 // ---------- notebook ----------
 let notes = store.get("notes", []);
@@ -1273,6 +1615,7 @@ $("clearYes").addEventListener("click", () => { notes = []; store.set("notes", n
 function openSheet(id) { $(id).hidden = false; $(id).querySelector("[data-close]").focus() }
 function closeSheets() { document.querySelectorAll(".sheet").forEach((s) => s.hidden = true) }
 $("openNotes").addEventListener("click", () => openSheet("notesSheet"));
+$("openConvs").addEventListener("click", () => { renderConvs(); openSheet("convSheet") });
 $("openSettings").addEventListener("click", () => openSheet("settingsSheet"));
 document.querySelectorAll(".sheet").forEach((s) => {
   s.addEventListener("click", (e) => { if (e.target === s || e.target.matches("[data-close]")) closeSheets() });
@@ -1280,6 +1623,11 @@ document.querySelectorAll(".sheet").forEach((s) => {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheets() });
 
 function renderExample() {
+  if (!activePrompt().corrections) {
+    $("log").innerHTML = "";
+    $("log").append(el("p", "empty-chat", t("chatEmpty")));
+    return;
+  }
   const [q, said, orig, corr, whyByLang, reply] = L().example;
   const why = settings.nativeExplain ? whyByLang[settings.native] : "";
   const log = $("log");
@@ -1302,18 +1650,32 @@ function applyI18n() {
   renderEndWord();
   renderNotes();
   renderPrompt();
+  renderConvs();
   renderDiag();
   if (log.length) renderLog(); else if (!turns.length) renderExample();
   setState(state);
 }
-// Pick up the previous conversation where it stopped.
-const savedConversation = store.get("conversation", null);
-if (savedConversation?.log?.length) {
-  turns = savedConversation.turns || [];
-  log = savedConversation.log;
-  mistakeCounts = savedConversation.counts || {};
-  lastReply = savedConversation.lastReply || "";
-  started = true;
+// Pick up the conversations where they stopped. The single conversation of earlier versions becomes the first one.
+const savedConvs = store.get("conversations", null);
+if (savedConvs?.list?.length) {
+  convs = savedConvs.list;
+  currentId = savedConvs.currentId;
+} else {
+  const old = store.get("conversation", null);
+  if (old?.log?.length) {
+    const c = newConvObj(t("firstConvTitle"));
+    Object.assign(c, { turns: old.turns || [], log: old.log, counts: old.counts || {}, lastReply: old.lastReply || "" });
+    convs.push(c);
+    currentId = c.id;
+  }
+}
+if (!convs.length) convs.push(newConvObj());
+if (!currentConv()) currentId = [...convs].sort((a, b) => b.updated - a.updated)[0].id;
+{
+  const c = currentConv();
+  turns = c.turns; log = c.log; mistakeCounts = c.counts || {}; lastReply = c.lastReply || "";
+  started = log.length > 0;
+  storeConvs();
 }
 renderCar();
 $("callField").hidden = !NATIVE;

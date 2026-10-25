@@ -2,15 +2,17 @@
 
 Fluent is a voice conversation partner for practising a foreign language. You speak, Claude answers out loud and keeps the conversation going like a real person, correcting one mistake at a time. Corrections are saved to a notebook you can review later.
 
-Available languages: English (American, British), Spanish (Spain, Mexico), German, Italian, Portuguese (Brazil, Portugal) and Dutch. The interface is available in English and French. Explanations and Fluent's spoken messages use your native language (English or French), set in **Settings**.
+Available languages: French, English (American, British), Spanish (Spain, Mexico), German, Italian, Portuguese (Brazil, Portugal) and Dutch. The interface is available in English and French. Explanations and Fluent's spoken messages use your native language (English or French), set in **Settings**.
 
 ## How it works
 
 - **End word**: Fluent keeps listening until you say your end word, even if you pause. Each language has a default end word, which you can change in **Settings**. If you leave it empty, your message is sent after a short silence.
 - **Accent**: Claude receives the transcript along with the speech recognizer's other hypotheses. It works out what you meant and shows it under your message ("Understood: …"). It never corrects pronunciation.
 - **Hands-free**: after each reply has been read aloud, Fluent starts listening again.
-- **Instructions for Claude**: in **Settings**, the full text that tells Claude how to talk and when and how to correct you is editable (in French or English, with placeholders such as `{language}` or `{level}`). By default Claude chats like a friend, corrects important mistakes right away, lets small ones go and brings them up once the same kind comes back 3 times, weaving the correction into its reply.
-- **Saved conversation**: settings, notebook and the current conversation are kept when you close the app; **New conversation** starts over.
+- **Prompts**: **Settings** holds several prompts. Two built-in ones can always be restored: *Language practice* (Claude chats like a friend, corrects important mistakes right away, lets small ones go and brings them up once the same kind comes back 3 times) and *Free conversation* (a spoken chat with Claude, as in writing, without corrections). You can edit them or create your own, with placeholders such as `{language}` or `{level}`.
+- **Conversations**: like in the Claude app, **New conversation** keeps the previous ones; the **Chats** list reopens, renames or deletes them. Each conversation remembers its prompt, and its history is sent to Claude with every message, so it remembers the discussion, also after a restart.
+- **Everything by voice**: just ask, in your own words, to change any setting (language, voice speed, end word, car mode…), to create, edit or switch prompts, or to start, open, rename or delete a conversation. When a change needs the microphone restarted, Fluent does it on its own. Only the API key cannot be changed by voice.
+- **Saved**: settings, notebook and all conversations are kept when you close the app.
 - **Confirmation sound**: a short, soft two-note sound tells you your sentence was received and Claude is thinking (can be turned off in **Settings**).
 - **Voice commands**: ask Claude, in the language you are practising or in your native language, to repeat, to speak more slowly or faster, to change the subject or to pause.
 
