@@ -39,7 +39,7 @@ Install:
 2. Allow installing apps from this source when Android asks.
 3. Open Fluent, allow the microphone, nearby devices (Bluetooth) and notifications, then paste your Anthropic API key in **Settings**.
 
-Each push to `master` builds a new APK (GitHub Actions) that installs over the previous one. To build it yourself: `./build.sh && gradle -p android assembleDebug` with the Android SDK installed.
+Each push to `main` builds a new APK (GitHub Actions) that installs over the previous one. To build it yourself: `./build.sh && gradle -p android assembleDebug` with the Android SDK installed.
 
 ## Install on Android (web version)
 
