@@ -260,6 +260,20 @@ body.car .side .btn { padding: 12px 16px; font-size: 1rem }
       <div class="row"><button class="btn" id="copyDiag" type="button" data-i="copyDiag"></button></div>
     </div>
     <div class="field">
+      <label for="alts" data-i="altsLab">Hypothèses de reconnaissance</label>
+      <select id="alts">
+        <option value="none" data-i="altsNone"></option>
+        <option value="one" data-i="altsOne"></option>
+        <option value="all" data-i="altsAll"></option>
+      </select>
+      <small data-i="altsHelp"></small>
+    </div>
+    <div class="field">
+      <span class="lab" data-i="cacheLab">Cache de prompt</span>
+      <label class="switch"><input type="checkbox" id="cache" checked> <span data-i="cacheLabel"></span></label>
+      <small data-i="cacheHelp"></small>
+    </div>
+    <div class="field">
       <span class="lab" data-i="chimeLab">Son de confirmation</span>
       <label class="switch"><input type="checkbox" id="chime" checked> <span data-i="chimeLabel"></span></label>
     </div>
@@ -368,6 +382,11 @@ const I18N = {
     promptNew: "Nouveau prompt", promptDelete: "Supprimer ce prompt", promptNamePh: "Nom du prompt", promptNewName: "Mon prompt {n}",
     promptCorrections: "Corriger mes fautes de langue",
     chatEmpty: "Touchez le micro et parlez : Claude vous répond à voix haute.", settingChanged: "Réglage modifié : {k} → {v}",
+    altsLab: "Hypothèses de reconnaissance", altsNone: "Aucune : ma phrase seule", altsOne: "Une seule : la meilleure alternative", altsAll: "Toutes : jusqu'à 3 par morceau de phrase",
+    altsHelp: "Les autres versions de votre phrase proposées par la reconnaissance vocale, envoyées à Claude pour mieux comprendre malgré l'accent. Plus il y en a, plus chaque requête coûte.",
+    cacheLab: "Cache de prompt", cacheLabel: "Réutiliser les instructions et l'historique d'une phrase à l'autre",
+    cacheHelp: "Ce que Claude a déjà reçu est relu depuis le cache à environ 5 % du prix normal, et la réponse arrive plus vite. Le diagnostic affiche les jetons et le coût de chaque requête.",
+    usageLine: "Jetons : {read} relus du cache, {write} mis en cache, {fresh} nouveaux, {out} en sortie · ≈ {cost} (discussion : {total})",
     chimeLab: "Son de confirmation", chimeLabel: "Un son court quand votre phrase est reçue et que Claude réfléchit",
     sayRetry: "Connexion difficile, je réessaie.", sayMicStalled: "Le micro ne répond pas, je le relance.", sayFail: "Je n'ai pas pu joindre Claude. Répétez, s'il vous plaît.",
   },
@@ -430,6 +449,11 @@ const I18N = {
     promptNew: "New prompt", promptDelete: "Delete this prompt", promptNamePh: "Prompt name", promptNewName: "My prompt {n}",
     promptCorrections: "Correct my language mistakes",
     chatEmpty: "Tap the mic and talk: Claude answers out loud.", settingChanged: "Setting changed: {k} → {v}",
+    altsLab: "Recognition hypotheses", altsNone: "None: my sentence only", altsOne: "One: the best alternative", altsAll: "All: up to 3 per segment",
+    altsHelp: "Other versions of your sentence suggested by speech recognition, sent to Claude to understand you better despite the accent. The more there are, the more each request costs.",
+    cacheLab: "Prompt caching", cacheLabel: "Reuse the instructions and history from one sentence to the next",
+    cacheHelp: "What Claude already received is read from the cache at about 5% of the normal price, and answers come faster. Diagnostics show the tokens and cost of each request.",
+    usageLine: "Tokens: {read} read from cache, {write} cached, {fresh} new, {out} output · ≈ {cost} (conversation: {total})",
     chimeLab: "Confirmation sound", chimeLabel: "A short sound when your sentence is received and Claude is thinking",
     sayRetry: "Poor connection, retrying.", sayMicStalled: "The microphone isn't responding, restarting it.", sayFail: "I couldn't reach Claude. Please say that again.",
   },
@@ -484,7 +508,7 @@ const stored = store.get("settings", {});
 const browserFr = /^fr\b/i.test(navigator.language || "");
 const settings = Object.assign({
   apiKey: "", model: "claude-opus-5-5", lang: stored.accent || "en-US", level: "B1", topic: "", voice: "",
-  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true, micMode: "stream", chime: true,
+  rate: 0.95, patience: 1.8, endWord: null, nativeExplain: stored.frExplain ?? true, handsFree: true, carMode: false, callMode: true, micMode: "stream", chime: true, alts: "none", cache: true,
   ui: browserFr ? "fr" : "en", native: browserFr ? "fr" : "en",
   prompts: [], promptOverrides: {}, promptId: "learning",
 }, stored);
@@ -517,8 +541,8 @@ function bindSetting(id, key, kind = "value") {
     saveSettings(); onSettingChange(key);
   });
 }
-[["micMode","micMode"],["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
-[["nativeExplain","nativeExplain"],["chime","chime"],["callMode","callMode"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
+[["alts","alts"],["micMode","micMode"],["apiKey","apiKey"],["model","model"],["lang","lang"],["ui","ui"],["native","native"],["level","level"],["topic","topic"],["rate","rate"],["patience","patience"],["endWord","endWord"]].forEach(([i,k]) => bindSetting(i,k));
+[["nativeExplain","nativeExplain"],["chime","chime"],["cache","cache"],["callMode","callMode"],["handsFree","handsFree"],["carMode","carMode"]].forEach(([i,k]) => bindSetting(i,k,"checked"));
 $("rate").addEventListener("input", (e) => $("rateVal").textContent = e.target.value);
 $("patience").addEventListener("input", (e) => $("patienceVal").textContent = e.target.value);
 $("rateVal").textContent = settings.rate; $("patienceVal").textContent = settings.patience;
@@ -756,7 +780,7 @@ const tallyText = () => Object.entries(mistakeCounts).filter(([, n]) => n > 0)
 
 const ACTIONS = ["none", "repeat", "slower", "faster", "pause", "new_topic"];
 // Settings Claude may change when the user asks out loud (everything but the API key).
-const VOICE_SETTINGS = ["lang", "native", "ui", "level", "topic", "endWord", "rate", "patience", "voice", "handsFree", "carMode", "chime", "nativeExplain", "callMode", "micMode", "model"];
+const VOICE_SETTINGS = ["lang", "native", "ui", "level", "topic", "endWord", "rate", "patience", "voice", "handsFree", "carMode", "chime", "nativeExplain", "callMode", "cache", "alts", "micMode", "model"];
 const APP_ACTIONS = ["none", "new_conversation", "open_conversation", "rename_conversation", "delete_conversation",
   "create_prompt", "edit_prompt", "rename_prompt", "select_prompt", "reset_prompt", "delete_prompt"];
 const SCHEMA = {
@@ -782,33 +806,43 @@ const SCHEMA = {
 };
 
 // What Claude needs to know to change settings, conversations and prompts on request.
+// This part never changes during a conversation (it is cached); current values are in stateInfo().
 function controlInfo() {
   const langs = Object.entries(LANGS).map(([code, l]) => `${code} (${l.name})`).join(", ");
-  const voiceNames = voicesFor(settings.lang).slice(0, 12).map((v) => v.name).join(", ") || "none listed";
+  return `- App control: the user can change any setting, manage conversations and manage prompts just by asking, in their own words (no fixed commands). Do it only when they clearly ask, and confirm briefly in "reply" what you did. If a request is unclear, ask instead of guessing. After changing the conversation language, write the confirmation in the new language. Current values, conversations and prompts are given in the app state block of the last message.
+  Use "settings" for setting changes (several at once if asked) and "app" for one action on conversations or prompts.
+  Settings (key: allowed values):
+  - lang: conversation language, used for speech recognition and the voice: ${langs}
+  - native: user's native language, for explanations and spoken status messages: fr, en
+  - ui: interface language: fr, en
+  - level: A2, B1, B2, C1
+  - topic: conversation topic, free text ("" for open)
+  - endWord: word the user says to finish speaking, "" to send after a silence
+  - rate: voice speed 0.6 to 1.3
+  - patience: seconds of silence before sending when there is no end word, 1 to 4
+  - voice: one of the voices listed in the app state
+  - handsFree (listen again after each reply), carMode, chime (sound when a sentence is received), nativeExplain (explanations in the native language), callMode (car microphone and speakers over Bluetooth), cache (prompt caching, cheaper requests): true or false
+  - alts: speech-recognition hypotheses sent with each sentence: none (the sentence only), one (the best alternative), all (up to 3 per segment)
+  - micMode: stream (recommended), stream_ondevice, system
+  - model: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5
+  App actions: new_conversation (starts a new conversation; the current one is kept), open_conversation (target: number or title), rename_conversation (target, or "" for the current one; name), delete_conversation (target), create_prompt (name; prompt_text: complete instructions written in the user's language in the style of the active prompt, using the same {placeholders} when useful; prompt_corrections: whether to correct language mistakes; activate: whether to use it now), edit_prompt (target, or "" for the active one; prompt_text: the complete new text), rename_prompt (target; name), select_prompt (target), reset_prompt (target: a built-in prompt, back to its original text), delete_prompt (target). Unused fields: "" or false.`;
+}
+
+// What changes from one message to the next: sent with the last message, after the cached part.
+function stateInfo() {
   const cur = (k) => JSON.stringify(settings[k] ?? "");
+  const voiceNames = voicesFor(settings.lang).slice(0, 12).map((v) => v.name).join(", ") || "none listed";
   const convList = [...convs].sort((a, b) => b.updated - a.updated).slice(0, 25)
     .map((c, i) => `${i + 1}. ${c.id === currentId ? "* " : ""}"${c.title || "untitled"}" (${c.log.filter((e) => e.k === "me").length} messages)`).join("\n");
   const promptList = allPrompts().map((q) => `- ${q.id === settings.promptId ? "* " : ""}"${q.name}"${q.builtin ? " (built-in)" : ""}, corrections ${q.corrections ? "on" : "off"}`).join("\n");
-  return `- App control: the user can change any setting, manage conversations and manage prompts just by asking, in their own words (no fixed commands). Do it only when they clearly ask, and confirm briefly in "reply" what you did. If a request is unclear, ask instead of guessing. After changing the conversation language, write the confirmation in the new language.
-  Use "settings" for setting changes (several at once if asked) and "app" for one action on conversations or prompts.
-  Settings (key: allowed values; current value):
-  - lang: conversation language, used for speech recognition and the voice: ${langs}; current ${cur("lang")}
-  - native: user's native language, for explanations and spoken status messages: fr, en; current ${cur("native")}
-  - ui: interface language: fr, en; current ${cur("ui")}
-  - level: A2, B1, B2, C1; current ${cur("level")}
-  - topic: conversation topic, free text ("" for open); current ${cur("topic")}
-  - endWord: word the user says to finish speaking, "" to send after a silence; current ${cur("endWord")}
-  - rate: voice speed 0.6 to 1.3; current ${cur("rate")}
-  - patience: seconds of silence before sending when there is no end word, 1 to 4; current ${cur("patience")}
-  - voice: one of ${voiceNames}; current ${cur("voice")}
-  - handsFree (listen again after each reply), carMode, chime (sound when a sentence is received), nativeExplain (explanations in the native language), callMode (car microphone and speakers over Bluetooth): true or false
-  - micMode: stream (recommended), stream_ondevice, system; current ${cur("micMode")}
-  - model: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; current ${cur("model")}
-  Conversations (most recent first, * = current):
+  const tally = activePrompt().corrections ? `\nSmall mistakes the user made that you have not corrected yet, by type:\n${tallyText()}` : "";
+  return `[App state, not said by the user]
+Current settings: ${VOICE_SETTINGS.filter((k) => k !== "voice").map((k) => `${k}=${cur(k)}`).join(", ")}, voice=${cur("voice")}
+Voices available for this language: ${voiceNames}
+Conversations (most recent first, * = current):
 ${convList}
-  Prompts (* = active):
-${promptList}
-  App actions: new_conversation (starts a new conversation; the current one is kept), open_conversation (target: number or title), rename_conversation (target, or "" for the current one; name), delete_conversation (target), create_prompt (name; prompt_text: complete instructions written in the user's language in the style of the active prompt, using the same {placeholders} when useful; prompt_corrections: whether to correct language mistakes; activate: whether to use it now), edit_prompt (target, or "" for the active one; prompt_text: the complete new text), rename_prompt (target; name), select_prompt (target), reset_prompt (target: a built-in prompt, back to its original text), delete_prompt (target). Unused fields: "" or false.`;
+Prompts (* = active):
+${promptList}${tally}`;
 }
 
 function rules() {
@@ -817,14 +851,13 @@ function rules() {
   const lang = L().name, native = NATIVES[settings.native].name;
   const end = settings.endWord ? `\n- The user ends each turn by saying "${settings.endWord}". If that word, or something that sounds like it, is left at the end of a message, ignore it.` : "";
   const corrections = p.corrections
-    ? `- Small mistakes the user made that you have not corrected yet, by type:
-${tallyText()}`
+    ? `- Mistake tracking: the app state block lists the small mistakes the user made that you have not corrected yet, by type.`
     : `- Language corrections are off for this conversation: "mistake" is always "none", the other mistake fields are "" and corrected_in_reply is false.`;
   return `${visible}
 
 ---
 APP INSTRUCTIONS (always follow these; everything above is the user's own setup and wins on style):
-- Speech recognition: when available, other recognizer hypotheses are listed after the transcript. Use them to work out what the user meant.${end}
+- Speech recognition: the user's text comes from speech recognition. When other recognizer hypotheses are listed after it, use them to work out what the user meant.${end}
 - Voice commands: if the user asks you, in ${lang} or in ${native}, to repeat, to speak more slowly or faster, to pause or stop, or to change the subject, set "action" to "repeat", "slower", "faster", "pause" or "new_topic" and "mistake" to "none". For "repeat", leave reply empty. For "slower", "faster" and "pause", reply with a very short acknowledgement. For "new_topic", bring up a new subject. Otherwise "action" is "none".
 ${controlInfo()}
 ${corrections}
@@ -833,7 +866,7 @@ Return JSON:
 - action: as above.
 - understood: the sentence you believe they meant, keeping their own wording and grammar and fixing only speech-recognition errors.
 - mistake: "none", "minor" or "major", for the most useful mistake in "understood" (never recognition errors or pronunciation).
-- mistake_type: a short English label for that kind of mistake (for example "present perfect for finished past", "article", "preposition", "adjective agreement"). Reuse the exact labels from the list above when it is the same kind. "" if none.
+- mistake_type: a short English label for that kind of mistake (for example "present perfect for finished past", "article", "preposition", "adjective agreement"). Reuse the exact labels from the app state list when it is the same kind. "" if none.
 - original: the wrong fragment (a few words), corrected: its natural correction, explanation: one short sentence on the rule as described above. All "" if none.
 - corrected_in_reply: true only if your reply corrects that mistake out loud.
 - reply: what you say, read aloud by a speech synthesizer. Plain spoken text: no markdown, lists or emoji, except *asterisks* around the word you stress when you correct.
@@ -852,13 +885,19 @@ async function askTutor() {
   const recent = turns.slice(-HISTORY_TURNS);
   if (recent[0]?.role !== "user") recent.shift();
   if (sample) {
-    const input = [{ role: "user", content: rules() + "\n\nReply with only the JSON object. The conversation follows." }, ...recent];
+    const input = [{ role: "user", content: rules() + "\n\n" + stateInfo() + "\n\nReply with only the JSON object. The conversation follows." }, ...recent];
     return await sample.json(input, { modelTier: "default", effort: "low", cache: false });
   }
   if (!settings.apiKey) { openSheet("settingsSheet"); throw { userMessage: t("errNoKey") } }
   const haiku = settings.model === "claude-haiku-5-5";
+  // Prompt caching: the instructions and the history stay identical from one message to the next, so they are
+  // marked for the cache (system, and the latest message of the history). What changes every time (the app
+  // state) comes last, after the cache marks.
+  const cache = settings.cache ? { cache_control: { type: "ephemeral" } } : {};
+  const messages = recent.map((m, i) => ({ role: m.role, content: [{ type: "text", text: m.content, ...(i === recent.length - 1 ? cache : {}) }] }));
+  messages[messages.length - 1].content.push({ type: "text", text: stateInfo() });
   const request = {
-    model: settings.model, max_tokens: 4000, system: rules(), messages: recent,
+    model: settings.model, max_tokens: 4000, system: [{ type: "text", text: rules(), ...cache }], messages,
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
     ...(haiku ? {} : { fallbacks: "default" }),
   };
@@ -869,10 +908,30 @@ async function askTutor() {
     if (r.status !== 200) throw { status: r.status || undefined, message: r.body };
     res = JSON.parse(r.body);
   } else res = await sdkRequest(request, haiku);
+  reportUsage(res.usage);
   if (res.stop_reason === "refusal") throw { userMessage: t("errRefusal") };
   const text = res.content.find((b) => b.type === "text")?.text;
   if (!text) throw { userMessage: t("errEmpty") };
   return JSON.parse(text);
+}
+
+// Price per million tokens: input, output, cache read, cache write (5 min).
+const PRICES = {
+  "claude-opus-5-5": [4, 20, 0.2, 5],
+  "claude-sonnet-5-5": [2, 10, 0.2, 2.5],
+  "claude-haiku-5-5": [0.1, 0.5, 0.01, 0.125],
+};
+// Tokens and estimated cost of each request, in the diagnostics, with a running total per conversation.
+function reportUsage(u) {
+  if (!u) return;
+  const [pin, pout, pread, pwrite] = PRICES[settings.model] || PRICES["claude-opus-5-5"];
+  const read = u.cache_read_input_tokens || 0, write = u.cache_creation_input_tokens || 0, fresh = u.input_tokens || 0, out = u.output_tokens || 0;
+  const cost = (fresh * pin + out * pout + read * pread + write * pwrite) / 1e6;
+  const c = currentConv();
+  if (c) c.cost = (c.cost || 0) + cost;
+  const fmt = (n) => n.toLocaleString(settings.ui === "fr" ? "fr-FR" : "en-GB");
+  const usd = (x) => x.toLocaleString(settings.ui === "fr" ? "fr-FR" : "en-GB", { style: "currency", currency: "USD", maximumFractionDigits: 3 });
+  addDiag(t("usageLine", { read: fmt(read), write: fmt(write), fresh: fmt(fresh), out: fmt(out), cost: usd(cost), total: usd(c?.cost || cost) }));
 }
 
 const httpWaiting = {};
@@ -1122,7 +1181,10 @@ function startRun(s) {
       const res = ev.results[i], t = res[0].transcript.trim();
       if (!t) continue;
       if (!res.isFinal) { interim += " " + t; continue }
-      const alts = Array.from(res).slice(1).map((a) => a.transcript.trim()).filter((a) => a && norm(a) !== norm(t) && !endsWithEndWord(a));
+      // Alternatives keep their words but lose a trailing end word, like the main text.
+      const alts = Array.from(res).slice(1).map((a) => a.transcript.trim())
+        .map((a) => endsWithEndWord(a) ? dropLastWords(a, words(settings.endWord).length) : a)
+        .filter((a) => a && norm(a) !== norm(t) && norm(a) !== norm(dropLastWords(t, words(settings.endWord || "").length)));
       const last = segs[segs.length - 1];
       if (last && norm(t).startsWith(norm(last))) { segs[segs.length - 1] = t; segAlts[segAlts.length - 1] = alts }
       else if (last && norm(last).startsWith(norm(t))) continue;
@@ -1381,8 +1443,11 @@ function addNotice(text) { addEntry({ k: "notice", text }) }
 // ---------- conversation loop ----------
 // What Claude receives for a spoken turn: the transcript plus the recognizer's other hypotheses.
 function packTurn(text, alts) {
-  if (!alts?.length) return text;
-  const lines = alts.map((a, i) => `${i + 1}. ${a.slice(0, 3).join(" | ")}`).join("\n");
+  // Setting "alts": none (the sentence only, default), one (best alternative per segment), all (up to 3).
+  const keep = settings.alts === "all" ? 3 : settings.alts === "one" ? 1 : 0;
+  alts = (alts || []).map((a) => a.slice(0, keep)).filter((a) => a.length);
+  if (!keep || !alts.length) return text;
+  const lines = alts.map((a, i) => `${i + 1}. ${a.join(" | ")}`).join("\n");
   return `${text}\n\n[Other speech-recognition hypotheses, per segment:\n${lines}]`;
 }
 
@@ -1476,7 +1541,7 @@ async function send(text, alts) {
 }
 
 // ---------- changes asked for out loud ----------
-const BOOL_SETTINGS = ["handsFree", "carMode", "chime", "nativeExplain", "callMode"];
+const BOOL_SETTINGS = ["handsFree", "carMode", "chime", "nativeExplain", "callMode", "cache"];
 function applySetting(key, raw) {
   if (!VOICE_SETTINGS.includes(key)) return false;
   let v = String(raw ?? "").trim();
@@ -1492,6 +1557,7 @@ function applySetting(key, raw) {
   else if (key === "native" || key === "ui") { v = v.slice(0, 2).toLowerCase(); if (!(key === "ui" ? I18N : NATIVES)[v]) return false }
   else if (key === "level") { v = v.toUpperCase(); if (!["A2", "B1", "B2", "C1"].includes(v)) return false }
   else if (key === "micMode") { if (!["stream", "stream_ondevice", "system"].includes(v)) return false }
+  else if (key === "alts") { v = v.toLowerCase(); if (!["none", "one", "all"].includes(v)) return false }
   else if (key === "model") { if (![...$("model").options].some((o) => o.value === v)) return false }
   else if (key === "voice") { if (!voices.some((x) => x.name === v)) return false }
   if (settings[key] === v) return false;
